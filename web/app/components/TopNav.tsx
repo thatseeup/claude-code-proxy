@@ -11,7 +11,7 @@ export default function TopNav() {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-gray-200 dark:bg-slate-900 dark:border-slate-700">
-      <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div className="w-full px-6 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Claude Code Monitor
