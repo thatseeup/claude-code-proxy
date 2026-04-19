@@ -4,12 +4,15 @@ import {
   Link,
   useLoaderData,
   useParams,
+  useRouteLoaderData,
   useSearchParams,
 } from "@remix-run/react";
 import { ArrowLeftRight, Brain, Sparkles, Zap } from "lucide-react";
 
 import HorizontalSplit from "../components/HorizontalSplit";
 import RequestDetailContent from "../components/RequestDetailContent";
+import SessionPicker from "../components/SessionPicker";
+import type { SessionSummary } from "../components/SessionPicker";
 import { getChatCompletionsEndpoint } from "../utils/models";
 
 interface RequestLog {
@@ -98,6 +101,10 @@ function statusPillClass(status: number) {
 export default function RequestsForSession() {
   const { requests, modelFilter, sessionIdToken } =
     useLoaderData<typeof loader>();
+  const parentData = useRouteLoaderData("routes/requests") as
+    | { sessions: SessionSummary[] }
+    | undefined;
+  const sessions = parentData?.sessions ?? [];
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const rid = searchParams.get("rid") ?? "";
@@ -118,17 +125,58 @@ export default function RequestsForSession() {
     setSearchParams(next, { replace: false });
   };
 
-  const displaySessionLabel =
-    sessionIdToken === UNKNOWN_TOKEN || sessionIdToken === ""
-      ? "Unknown"
-      : sessionIdToken;
+  const activeSessionToken =
+    sessionIdToken === "" ? UNKNOWN_TOKEN : sessionIdToken;
 
   const listPane = (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden h-full flex flex-col mr-2">
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 shrink-0">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
-          Requests
-        </h2>
+      <SessionPicker
+        sessions={sessions}
+        activeSessionId={activeSessionToken}
+      />
+      <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 shrink-0 flex items-center justify-between gap-2">
+        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+          {requests.length} request{requests.length === 1 ? "" : "s"}
+        </div>
+        <div className="inline-flex items-center bg-gray-100 rounded p-0.5 space-x-0.5">
+          {[
+            { key: "all", label: "All", color: "", icon: null },
+            {
+              key: "opus",
+              label: "Opus",
+              color: "text-purple-600",
+              icon: <Brain className="w-3 h-3" />,
+            },
+            {
+              key: "sonnet",
+              label: "Sonnet",
+              color: "text-indigo-600",
+              icon: <Sparkles className="w-3 h-3" />,
+            },
+            {
+              key: "haiku",
+              label: "Haiku",
+              color: "text-teal-600",
+              icon: <Zap className="w-3 h-3" />,
+            },
+          ].map((opt) => {
+            const active = modelFilter === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => handleModelFilter(opt.key)}
+                className={`px-2 py-1 rounded text-[11px] font-medium transition-all duration-200 flex items-center space-x-1 ${
+                  active
+                    ? `bg-white shadow-sm ${opt.color || "text-gray-900"}`
+                    : "bg-transparent text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {opt.icon}
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="divide-y divide-gray-200 overflow-y-auto flex-1 min-h-0">
         {requests.length === 0 ? (
@@ -271,63 +319,7 @@ export default function RequestsForSession() {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)] min-h-0">
-      {/* Session header + model filter */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 shrink-0 mb-4">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Session
-            </div>
-            <div className="font-mono text-sm text-gray-900 break-all">
-              {displaySessionLabel}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              {requests.length} request{requests.length === 1 ? "" : "s"}
-            </div>
-          </div>
-          <div className="inline-flex items-center bg-gray-100 rounded p-0.5 space-x-0.5">
-            {[
-              { key: "all", label: "All", color: "", icon: null },
-              {
-                key: "opus",
-                label: "Opus",
-                color: "text-purple-600",
-                icon: <Brain className="w-3 h-3" />,
-              },
-              {
-                key: "sonnet",
-                label: "Sonnet",
-                color: "text-indigo-600",
-                icon: <Sparkles className="w-3 h-3" />,
-              },
-              {
-                key: "haiku",
-                label: "Haiku",
-                color: "text-teal-600",
-                icon: <Zap className="w-3 h-3" />,
-              },
-            ].map((opt) => {
-              const active = modelFilter === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  onClick={() => handleModelFilter(opt.key)}
-                  className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 flex items-center space-x-1 ${
-                    active
-                      ? `bg-white shadow-sm ${opt.color || "text-gray-900"}`
-                      : "bg-transparent text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  {opt.icon}
-                  <span>{opt.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
+    <div className="flex flex-col h-[calc(100vh-7rem)] min-h-0">
       {/* Request list + detail, split horizontally */}
       <div className="flex-1 min-h-0">
         <HorizontalSplit left={listPane} right={detailPane} />

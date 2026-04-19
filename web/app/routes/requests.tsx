@@ -1,12 +1,9 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Outlet, useLoaderData, useParams } from "@remix-run/react";
+import { Outlet } from "@remix-run/react";
 
 import TopNav from "../components/TopNav";
-import SessionSidebar, {
-  type SessionSummary,
-} from "../components/SessionSidebar";
-import CollapsibleSidebar from "../components/CollapsibleSidebar";
+import { type SessionSummary } from "../components/SessionPicker";
 
 export const meta: MetaFunction = () => {
   return [
@@ -49,24 +46,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function RequestsLayout() {
-  const { sessions } = useLoaderData<typeof loader>();
-  const params = useParams();
-  const activeSessionId = params.sessionId ?? "";
-
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNav />
-      <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
-        <CollapsibleSidebar title="Sessions">
-          <SessionSidebar
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-          />
-        </CollapsibleSidebar>
-        <main className="flex-1 min-w-0">
-          <Outlet />
-        </main>
-      </div>
+      <main className="w-full px-4 py-6">
+        <Outlet />
+      </main>
     </div>
   );
 }

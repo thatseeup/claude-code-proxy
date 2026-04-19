@@ -4,12 +4,15 @@ import {
   Link,
   useLoaderData,
   useParams,
+  useRouteLoaderData,
   useSearchParams,
 } from "@remix-run/react";
 import { MessageCircle } from "lucide-react";
 
 import { ConversationThread } from "../components/ConversationThread";
 import HorizontalSplit from "../components/HorizontalSplit";
+import ProjectPicker from "../components/ProjectPicker";
+import type { ProjectSummary } from "../components/ProjectPicker";
 
 interface ConversationMessage {
   parentUuid: string | null;
@@ -112,6 +115,10 @@ function extractText(parsed: any): string {
 
 export default function ConversationsForProject() {
   const { conversations, projectPath } = useLoaderData<typeof loader>();
+  const parentData = useRouteLoaderData("routes/conversations") as
+    | { projects: ProjectSummary[] }
+    | undefined;
+  const projects = parentData?.projects ?? [];
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const sid = searchParams.get("sid") ?? "";
@@ -128,10 +135,12 @@ export default function ConversationsForProject() {
 
   const listPane = (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden h-full flex flex-col mr-2">
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 shrink-0">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
-          Conversations
-        </h2>
+      <ProjectPicker projects={projects} activeProjectId={projectPath} />
+      <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 shrink-0">
+        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+          {conversations.length} conversation
+          {conversations.length === 1 ? "" : "s"}
+        </div>
       </div>
       <div className="divide-y divide-gray-200 overflow-y-auto flex-1 min-h-0">
         {conversations.length === 0 ? (
@@ -226,21 +235,7 @@ export default function ConversationsForProject() {
   );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-9rem)] min-h-0">
-      {/* Project header */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 shrink-0 mb-4">
-        <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-          Project
-        </div>
-        <div className="font-mono text-sm text-gray-900 break-all">
-          {projectPath}
-        </div>
-        <div className="text-xs text-gray-500 mt-1">
-          {conversations.length} conversation
-          {conversations.length === 1 ? "" : "s"}
-        </div>
-      </div>
-
+    <div className="flex flex-col h-[calc(100vh-7rem)] min-h-0">
       {/* Conversation list + detail, split horizontally */}
       <div className="flex-1 min-h-0">
         <HorizontalSplit left={listPane} right={detailPane} />

@@ -1,12 +1,9 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { Outlet, useLoaderData, useParams } from "@remix-run/react";
+import { Outlet } from "@remix-run/react";
 
 import TopNav from "../components/TopNav";
-import ProjectSidebar, {
-  type ProjectSummary,
-} from "../components/ProjectSidebar";
-import CollapsibleSidebar from "../components/CollapsibleSidebar";
+import { type ProjectSummary } from "../components/ProjectPicker";
 
 export const meta: MetaFunction = () => {
   return [
@@ -40,24 +37,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function ConversationsLayout() {
-  const { projects } = useLoaderData<typeof loader>();
-  const params = useParams();
-  const activeProjectId = params.projectId ?? "";
-
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNav />
-      <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
-        <CollapsibleSidebar title="Projects">
-          <ProjectSidebar
-            projects={projects}
-            activeProjectId={activeProjectId}
-          />
-        </CollapsibleSidebar>
-        <main className="flex-1 min-w-0">
-          <Outlet />
-        </main>
-      </div>
+      <main className="w-full px-4 py-6">
+        <Outlet />
+      </main>
     </div>
   );
 }
