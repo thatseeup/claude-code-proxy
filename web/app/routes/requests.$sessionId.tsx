@@ -8,6 +8,7 @@ import {
 } from "@remix-run/react";
 import { ArrowLeftRight, Brain, Sparkles, Zap } from "lucide-react";
 
+import HorizontalSplit from "../components/HorizontalSplit";
 import RequestDetailContent from "../components/RequestDetailContent";
 import { getChatCompletionsEndpoint } from "../utils/models";
 
@@ -122,10 +123,157 @@ export default function RequestsForSession() {
       ? "Unknown"
       : sessionIdToken;
 
+  const listPane = (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden h-full flex flex-col mr-2">
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 shrink-0">
+        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+          Requests
+        </h2>
+      </div>
+      <div className="divide-y divide-gray-200 overflow-y-auto flex-1 min-h-0">
+        {requests.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            <h3 className="text-sm font-medium text-gray-600 mb-1">
+              No requests in this session
+            </h3>
+            <p className="text-xs text-gray-500">
+              Make sure you have set{" "}
+              <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">
+                ANTHROPIC_BASE_URL
+              </code>{" "}
+              to point at the proxy.
+            </p>
+          </div>
+        ) : (
+          requests.map((req) => {
+            const isSelected = req.requestId === (selected?.requestId ?? "");
+            const model = req.routedModel || req.body?.model;
+            const status = req.response?.statusCode as number | undefined;
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.set("rid", req.requestId);
+            return (
+              <Link
+                key={req.requestId}
+                to={`/requests/${encodeURIComponent(
+                  params.sessionId ?? ""
+                )}?${nextParams.toString()}`}
+                replace
+                className={`block px-4 py-3 transition-colors border-b border-gray-100 last:border-b-0 ${
+                  isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0 mr-4">
+                    <div className="flex items-center space-x-3 mb-1">
+                      <h3 className="text-sm font-medium">
+                        {modelBadge(model)}
+                      </h3>
+                      {req.routedModel &&
+                        req.originalModel &&
+                        req.routedModel !== req.originalModel && (
+                          <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium flex items-center space-x-1">
+                            <ArrowLeftRight className="w-3 h-3" />
+                            <span>routed</span>
+                          </span>
+                        )}
+                      {typeof status === "number" && (
+                        <span
+                          className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusPillClass(
+                            status
+                          )}`}
+                        >
+                          {status}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-600 font-mono mb-1 truncate">
+                      {getChatCompletionsEndpoint(
+                        req.routedModel,
+                        req.endpoint
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-3 text-xs">
+                      {req.response?.body?.usage && (
+                        <span className="font-mono text-gray-600">
+                          <span className="font-medium text-gray-900">
+                            {(
+                              (req.response.body.usage.input_tokens || 0) +
+                              (req.response.body.usage.output_tokens || 0)
+                            ).toLocaleString()}
+                          </span>{" "}
+                          tokens
+                        </span>
+                      )}
+                      {req.response?.responseTime && (
+                        <span className="font-mono text-gray-600">
+                          <span className="font-medium text-gray-900">
+                            {(req.response.responseTime / 1000).toFixed(2)}
+                          </span>
+                          s
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-xs text-gray-500">
+                      {new Date(req.timestamp).toLocaleDateString()}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {new Date(req.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+
+  const detailPane = selected ? (
+    <div className="bg-white border border-gray-200 rounded-lg h-full flex flex-col ml-2">
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
+        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+          Request Details
+        </h2>
+        <span className="text-xs font-mono text-gray-500">
+          {selected.requestId}
+        </span>
+      </div>
+      <div className="p-4 overflow-y-auto flex-1 min-h-0">
+        <RequestDetailContent
+          request={
+            {
+              ...selected,
+              // RequestDetailContent expects `id` as number — re-use requestId
+              // string; its usage is only for onGrade / display keys.
+              id: selected.requestId as unknown as number,
+            } as any
+          }
+          onGrade={() => {
+            /* grading UI out of scope for this step */
+          }}
+        />
+      </div>
+    </div>
+  ) : (
+    <div className="bg-white border border-gray-200 rounded-lg h-full flex items-center justify-center ml-2">
+      <div className="text-center text-gray-500 px-6 py-10">
+        <h3 className="text-sm font-medium text-gray-600 mb-1">
+          Select a request
+        </h3>
+        <p className="text-xs text-gray-500">
+          Pick a request from the list to see its details here.
+        </p>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-[calc(100vh-9rem)] min-h-0">
       {/* Session header + model filter */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
+      <div className="bg-white border border-gray-200 rounded-lg p-4 shrink-0 mb-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -180,143 +328,10 @@ export default function RequestsForSession() {
         </div>
       </div>
 
-      {/* Request list */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
-            Requests
-          </h2>
-        </div>
-        <div className="divide-y divide-gray-200">
-          {requests.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <h3 className="text-sm font-medium text-gray-600 mb-1">
-                No requests in this session
-              </h3>
-              <p className="text-xs text-gray-500">
-                Make sure you have set{" "}
-                <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">
-                  ANTHROPIC_BASE_URL
-                </code>{" "}
-                to point at the proxy.
-              </p>
-            </div>
-          ) : (
-            requests.map((req) => {
-              const isSelected = req.requestId === (selected?.requestId ?? "");
-              const model = req.routedModel || req.body?.model;
-              const status = req.response?.statusCode as number | undefined;
-              const nextParams = new URLSearchParams(searchParams);
-              nextParams.set("rid", req.requestId);
-              return (
-                <Link
-                  key={req.requestId}
-                  to={`/requests/${encodeURIComponent(
-                    params.sessionId ?? ""
-                  )}?${nextParams.toString()}`}
-                  replace
-                  className={`block px-4 py-3 transition-colors border-b border-gray-100 last:border-b-0 ${
-                    isSelected
-                      ? "bg-blue-50"
-                      : "hover:bg-gray-50"
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0 mr-4">
-                      <div className="flex items-center space-x-3 mb-1">
-                        <h3 className="text-sm font-medium">
-                          {modelBadge(model)}
-                        </h3>
-                        {req.routedModel &&
-                          req.originalModel &&
-                          req.routedModel !== req.originalModel && (
-                            <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium flex items-center space-x-1">
-                              <ArrowLeftRight className="w-3 h-3" />
-                              <span>routed</span>
-                            </span>
-                          )}
-                        {typeof status === "number" && (
-                          <span
-                            className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusPillClass(
-                              status
-                            )}`}
-                          >
-                            {status}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-600 font-mono mb-1 truncate">
-                        {getChatCompletionsEndpoint(
-                          req.routedModel,
-                          req.endpoint
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-3 text-xs">
-                        {req.response?.body?.usage && (
-                          <span className="font-mono text-gray-600">
-                            <span className="font-medium text-gray-900">
-                              {(
-                                (req.response.body.usage.input_tokens || 0) +
-                                (req.response.body.usage.output_tokens || 0)
-                              ).toLocaleString()}
-                            </span>{" "}
-                            tokens
-                          </span>
-                        )}
-                        {req.response?.responseTime && (
-                          <span className="font-mono text-gray-600">
-                            <span className="font-medium text-gray-900">
-                              {(req.response.responseTime / 1000).toFixed(2)}
-                            </span>
-                            s
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      <div className="text-xs text-gray-500">
-                        {new Date(req.timestamp).toLocaleDateString()}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {new Date(req.timestamp).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })
-          )}
-        </div>
+      {/* Request list + detail, split horizontally */}
+      <div className="flex-1 min-h-0">
+        <HorizontalSplit left={listPane} right={detailPane} />
       </div>
-
-      {/* Detail pane */}
-      {selected && (
-        <div className="bg-white border border-gray-200 rounded-lg">
-          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
-              Request Details
-            </h2>
-            <span className="text-xs font-mono text-gray-500">
-              {selected.requestId}
-            </span>
-          </div>
-          <div className="p-4">
-            <RequestDetailContent
-              request={
-                {
-                  ...selected,
-                  // RequestDetailContent expects `id` as number — re-use requestId
-                  // string; its usage is only for onGrade / display keys.
-                  id: selected.requestId as unknown as number,
-                } as any
-              }
-              onGrade={() => {
-                /* grading UI out of scope for this step */
-              }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

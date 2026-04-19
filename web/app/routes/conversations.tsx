@@ -6,6 +6,7 @@ import TopNav from "../components/TopNav";
 import ProjectSidebar, {
   type ProjectSummary,
 } from "../components/ProjectSidebar";
+import CollapsibleSidebar from "../components/CollapsibleSidebar";
 
 export const meta: MetaFunction = () => {
   return [
@@ -47,10 +48,12 @@ export default function ConversationsLayout() {
     <div className="min-h-screen bg-gray-50">
       <TopNav />
       <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
-        <ProjectSidebar
-          projects={projects}
-          activeProjectId={activeProjectId}
-        />
+        <CollapsibleSidebar title="Projects">
+          <ProjectSidebar
+            projects={projects}
+            activeProjectId={activeProjectId}
+          />
+        </CollapsibleSidebar>
         <main className="flex-1 min-w-0">
           <Outlet />
         </main>

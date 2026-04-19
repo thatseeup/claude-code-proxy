@@ -6,6 +6,7 @@ import TopNav from "../components/TopNav";
 import SessionSidebar, {
   type SessionSummary,
 } from "../components/SessionSidebar";
+import CollapsibleSidebar from "../components/CollapsibleSidebar";
 
 export const meta: MetaFunction = () => {
   return [
@@ -56,10 +57,12 @@ export default function RequestsLayout() {
     <div className="min-h-screen bg-gray-50">
       <TopNav />
       <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
-        <SessionSidebar
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-        />
+        <CollapsibleSidebar title="Sessions">
+          <SessionSidebar
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+          />
+        </CollapsibleSidebar>
         <main className="flex-1 min-w-0">
           <Outlet />
         </main>

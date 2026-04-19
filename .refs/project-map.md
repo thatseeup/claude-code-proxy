@@ -60,10 +60,10 @@ claude-code-proxy/
       tailwind.css
       routes/
         _index.tsx                     — `/` → `/requests` redirect only
-        requests.tsx                   — `/requests` parent layout: TopNav + SessionSidebar + `<Outlet/>`. loader 가 `/api/sessions` 조회 후 pathname === "/requests" 이면 최근 세션으로 redirect
-        requests.$sessionId.tsx        — `/requests/:sessionId` 요청 목록 + 상세. `sessionId === "unknown"` → Unknown 버킷. 선택된 요청은 `?rid=` 쿼리, 모델 필터는 `?model=` 쿼리
-        conversations.tsx              — `/conversations` parent layout: TopNav + ProjectSidebar + `<Outlet/>`. loader 가 `/api/projects` 조회 후 pathname === "/conversations" 이면 최근 프로젝트로 redirect
-        conversations.$projectId.tsx   — `/conversations/:projectId` 대화 목록 + 상세. 선택된 대화는 `?sid=` 쿼리
+        requests.tsx                   — `/requests` parent layout: TopNav + CollapsibleSidebar(SessionSidebar) + `<Outlet/>` (sidebar collapsible + 본문 좌/우 2단 구조의 parent). loader 가 `/api/sessions` 조회 후 pathname === "/requests" 이면 최근 세션으로 redirect
+        requests.$sessionId.tsx        — `/requests/:sessionId` 요청 목록 + 상세 (HorizontalSplit 기반 좌/우 2단 구조). `sessionId === "unknown"` → Unknown 버킷. 선택된 요청은 `?rid=` 쿼리, 모델 필터는 `?model=` 쿼리
+        conversations.tsx              — `/conversations` parent layout: TopNav + CollapsibleSidebar(ProjectSidebar) + `<Outlet/>` (sidebar collapsible + 본문 좌/우 2단 구조의 parent). loader 가 `/api/projects` 조회 후 pathname === "/conversations" 이면 최근 프로젝트로 redirect
+        conversations.$projectId.tsx   — `/conversations/:projectId` 대화 목록 + 상세 (HorizontalSplit 기반 좌/우 2단 구조). 선택된 대화는 `?sid=` 쿼리
         api.requests.tsx               — /api/requests GET/DELETE — backend 3001 프록시 (신규 UI 는 loader 에서 직접 백엔드 호출, 이 프록시는 현재 미사용)
         api.conversations.tsx          — /api/conversations GET — backend 3001 프록시 (신규 UI 는 loader 에서 직접 백엔드 호출)
         api.sessions.tsx               — /api/sessions GET — 세션 요약 프록시
@@ -74,6 +74,8 @@ claude-code-proxy/
         TopNav.tsx               — 상단 Requests / Conversations NavLink
         SessionSidebar.tsx       — `/requests` 세션 목록 + 행별 휴지통(fetcher DELETE → `/api/sessions/:id`)
         ProjectSidebar.tsx       — `/conversations` 프로젝트 목록 (삭제 버튼 없음 — jsonl 보호)
+        CollapsibleSidebar.tsx   — sidebar 열기/닫기 래퍼. 내부 state 만, 영속화 없음 — 매 마운트 `defaultOpen`(기본 true) 으로 초기화. 라우트 변경/자식 선택으로 자동 닫히지 않음
+        HorizontalSplit.tsx      — 좌/우 드래그 splitter 2단 레이아웃. 좌측 폭 `defaultLeftWidth`(기본 420px, min 240, max 800) 내부 state, 영속화 없음 — 매 마운트 디폴트로 리셋. mousemove/mouseup 리스너는 mouseup 에서 제거 + unmount cleanup 으로 body `userSelect/cursor` 복원
         RequestDetailContent.tsx — 요청/응답 상세 뷰 컨테이너
         ConversationThread.tsx   — 대화 스레드 표시
         MessageContent.tsx       — 메시지 본문 렌더링
@@ -285,3 +287,5 @@ CREATE TABLE requests (
 | Dockerfile CGO_ENABLED=1 | go-sqlite3 는 CGO 필수. 0 으로 바꾸면 빌드 실패 |
 | `api.grade-prompt.tsx` | Remix 쪽은 존재하나 Go 백엔드에 `/api/grade-prompt` 라우트 미등록 (main.go). 사용 시 404 — 백엔드 추가 필요 |
 | `~/.claude/projects/*.jsonl` 파싱 위치 | `NewConversationService()` 가 `os.UserHomeDir()` 사용 — Docker 내부에서는 경로 다름, 컨테이너에서는 conversation 기능 무효 |
+| `HorizontalSplit.tsx` mousemove/mouseup 리스너 정리 | `onMouseDown` 이 `window` 레벨 리스너 등록 → `onUp` 에서 반드시 제거 + 언마운트 cleanup 으로 body `userSelect/cursor` 복원. 누락 시 드래그 종료 후에도 커서가 `col-resize` 에 고정 / 메모리 누수 |
+| Sidebar/Split 상태 영속화 금지 | 요구사항상 localStorage/쿠키/서버 저장 없이 매 세션 디폴트로 복귀. `CollapsibleSidebar` 는 `defaultOpen=true`, `HorizontalSplit` 는 `defaultLeftWidth=420` 로 마운트 시 리셋 — 변경 시 UX 회귀 주의 |
