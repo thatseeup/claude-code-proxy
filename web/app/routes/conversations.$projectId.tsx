@@ -134,19 +134,19 @@ export default function ConversationsForProject() {
   };
 
   const listPane = (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden h-full flex flex-col mr-2">
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden h-full flex flex-col mr-2">
       <ProjectPicker projects={projects} activeProjectId={projectPath} />
-      <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 shrink-0">
-        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+      <div className="bg-gray-50 dark:bg-slate-800 px-3 py-2 border-b border-gray-200 dark:border-slate-700 shrink-0">
+        <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
           {conversations.length} conversation
           {conversations.length === 1 ? "" : "s"}
         </div>
       </div>
-      <div className="divide-y divide-gray-200 overflow-y-auto flex-1 min-h-0">
+      <div className="divide-y divide-gray-200 dark:divide-slate-700 overflow-y-auto flex-1 min-h-0">
         {conversations.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <MessageCircle className="w-6 h-6 mx-auto mb-2 text-gray-300" />
-            <h3 className="text-sm font-medium text-gray-600 mb-1">
+          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+            <MessageCircle className="w-6 h-6 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+            <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
               No conversations in this project
             </h3>
           </div>
@@ -171,28 +171,30 @@ export default function ConversationsForProject() {
                   handleSelect(conv.sessionId);
                 }}
                 className={`block px-4 py-3 transition-colors ${
-                  isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+                  isSelected
+                    ? "bg-blue-50 dark:bg-blue-900/30"
+                    : "hover:bg-gray-50 dark:hover:bg-slate-800"
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1">
-                      <span className="text-sm font-mono text-gray-900 truncate">
+                      <span className="text-sm font-mono text-gray-900 dark:text-gray-100 truncate">
                         {conv.sessionId.slice(0, 8)}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
                         {conv.messageCount} msg
                         {conv.messageCount === 1 ? "" : "s"}
                       </span>
                     </div>
                     {preview && (
-                      <div className="text-xs text-gray-600 truncate">
+                      <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
                         {preview}
                       </div>
                     )}
                   </div>
                   <div className="flex-shrink-0 text-right">
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       {formatTime(conv.endTime)}
                     </div>
                   </div>
@@ -206,12 +208,12 @@ export default function ConversationsForProject() {
   );
 
   const detailPane = selected ? (
-    <div className="bg-white border border-gray-200 rounded-lg h-full flex flex-col ml-2">
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg h-full flex flex-col ml-2">
+      <div className="bg-gray-50 dark:bg-slate-800 px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
           Conversation
         </h2>
-        <span className="text-xs font-mono text-gray-500">
+        <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
           {selected.sessionId}
         </span>
       </div>
@@ -222,12 +224,12 @@ export default function ConversationsForProject() {
       </div>
     </div>
   ) : (
-    <div className="bg-white border border-gray-200 rounded-lg h-full flex items-center justify-center ml-2">
-      <div className="text-center text-gray-500 px-6 py-10">
-        <h3 className="text-sm font-medium text-gray-600 mb-1">
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg h-full flex items-center justify-center ml-2">
+      <div className="text-center text-gray-500 dark:text-gray-400 px-6 py-10">
+        <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
           Select a conversation
         </h3>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Pick a conversation from the list to see its thread here.
         </p>
       </div>

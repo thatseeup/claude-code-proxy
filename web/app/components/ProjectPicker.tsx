@@ -60,7 +60,7 @@ export default function ProjectPicker({
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center gap-1 border-b border-gray-200 px-2 py-2 bg-white"
+      className="relative flex items-center gap-1 border-b border-gray-200 dark:border-slate-700 px-2 py-2 bg-white dark:bg-slate-900"
     >
       <button
         type="button"
@@ -68,24 +68,24 @@ export default function ProjectPicker({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label="Switch project"
-        className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-gray-200 bg-white hover:bg-gray-50 text-xs"
+        className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs"
       >
         <div className="min-w-0 flex flex-col items-start">
           <span
-            className="font-medium truncate text-gray-800 w-full text-left"
+            className="font-medium truncate text-gray-800 dark:text-gray-100 w-full text-left"
             title={activeProjectPath}
           >
             {activeDisplayName}
           </span>
           <span
-            className="text-[10px] text-gray-500 font-mono truncate w-full text-left"
+            className="text-[10px] text-gray-500 dark:text-gray-400 font-mono truncate w-full text-left"
             title={activeProjectPath}
           >
             {activeProjectPath}
           </span>
         </div>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-gray-500 shrink-0 transition-transform ${
+          className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 shrink-0 transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -94,7 +94,7 @@ export default function ProjectPicker({
       {open && projects.length > 0 ? (
         <div
           role="listbox"
-          className="absolute left-2 right-2 top-full mt-1 z-20 max-h-80 overflow-auto rounded border border-gray-200 bg-white shadow-lg"
+          className="absolute left-2 right-2 top-full mt-1 z-20 max-h-80 overflow-auto rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg"
         >
           <ul className="py-1">
             {projects.map((p) => {
@@ -106,23 +106,23 @@ export default function ProjectPicker({
                     role="option"
                     aria-selected={isActive}
                     onClick={() => handleSelect(p.projectPath)}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
-                      isActive ? "bg-blue-50" : ""
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-slate-700 ${
+                      isActive ? "bg-blue-50 dark:bg-blue-900/40" : ""
                     }`}
                     title={p.projectPath}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium truncate text-gray-800">
+                      <span className="font-medium truncate text-gray-800 dark:text-gray-100">
                         {p.displayName}
                       </span>
-                      <span className="shrink-0 text-[10px] text-gray-500">
+                      <span className="shrink-0 text-[10px] text-gray-500 dark:text-gray-400">
                         {p.conversationCount}
                       </span>
                     </div>
-                    <div className="text-[10px] text-gray-500 font-mono mt-0.5 truncate">
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 font-mono mt-0.5 truncate">
                       {p.projectPath}
                     </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
                       {formatLastMTime(p.lastMTime)}
                     </div>
                   </button>

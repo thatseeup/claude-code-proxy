@@ -77,25 +77,26 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 }
 
 function modelBadge(model: string | undefined) {
-  if (!model) return <span className="text-gray-900">API</span>;
+  if (!model) return <span className="text-gray-900 dark:text-gray-100">API</span>;
   if (model.includes("opus"))
-    return <span className="text-purple-600 font-semibold">Opus</span>;
+    return <span className="text-purple-600 dark:text-purple-400 font-semibold">Opus</span>;
   if (model.includes("sonnet"))
-    return <span className="text-indigo-600 font-semibold">Sonnet</span>;
+    return <span className="text-indigo-600 dark:text-indigo-400 font-semibold">Sonnet</span>;
   if (model.includes("haiku"))
-    return <span className="text-teal-600 font-semibold">Haiku</span>;
+    return <span className="text-teal-600 dark:text-teal-400 font-semibold">Haiku</span>;
   if (model.includes("gpt-4o"))
-    return <span className="text-green-600 font-semibold">GPT-4o</span>;
+    return <span className="text-green-600 dark:text-green-400 font-semibold">GPT-4o</span>;
   if (model.includes("gpt"))
-    return <span className="text-green-600 font-semibold">GPT</span>;
-  return <span className="text-gray-900">{model.split("-")[0]}</span>;
+    return <span className="text-green-600 dark:text-green-400 font-semibold">GPT</span>;
+  return <span className="text-gray-900 dark:text-gray-100">{model.split("-")[0]}</span>;
 }
 
 function statusPillClass(status: number) {
   if (status >= 200 && status < 300)
-    return "bg-green-100 text-green-700";
-  if (status >= 300 && status < 400) return "bg-yellow-100 text-yellow-700";
-  return "bg-red-100 text-red-700";
+    return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
+  if (status >= 300 && status < 400)
+    return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300";
+  return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 }
 
 export default function RequestsForSession() {
@@ -129,16 +130,16 @@ export default function RequestsForSession() {
     sessionIdToken === "" ? UNKNOWN_TOKEN : sessionIdToken;
 
   const listPane = (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden h-full flex flex-col mr-2">
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden h-full flex flex-col mr-2">
       <SessionPicker
         sessions={sessions}
         activeSessionId={activeSessionToken}
       />
-      <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 shrink-0 flex items-center justify-between gap-2">
-        <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+      <div className="bg-gray-50 dark:bg-slate-800 px-3 py-2 border-b border-gray-200 dark:border-slate-700 shrink-0 flex items-center justify-between gap-2">
+        <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
           {requests.length} request{requests.length === 1 ? "" : "s"}
         </div>
-        <div className="inline-flex items-center bg-gray-100 rounded p-0.5 space-x-0.5">
+        <div className="inline-flex items-center bg-gray-100 dark:bg-slate-700 rounded p-0.5 space-x-0.5">
           {[
             { key: "all", label: "All", color: "", icon: null },
             {
@@ -167,8 +168,8 @@ export default function RequestsForSession() {
                 onClick={() => handleModelFilter(opt.key)}
                 className={`px-2 py-1 rounded text-[11px] font-medium transition-all duration-200 flex items-center space-x-1 ${
                   active
-                    ? `bg-white shadow-sm ${opt.color || "text-gray-900"}`
-                    : "bg-transparent text-gray-600 hover:text-gray-900"
+                    ? `bg-white dark:bg-slate-900 shadow-sm ${opt.color || "text-gray-900 dark:text-gray-100"}`
+                    : "bg-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 {opt.icon}
@@ -178,15 +179,15 @@ export default function RequestsForSession() {
           })}
         </div>
       </div>
-      <div className="divide-y divide-gray-200 overflow-y-auto flex-1 min-h-0">
+      <div className="divide-y divide-gray-200 dark:divide-slate-700 overflow-y-auto flex-1 min-h-0">
         {requests.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <h3 className="text-sm font-medium text-gray-600 mb-1">
+          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+            <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
               No requests in this session
             </h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Make sure you have set{" "}
-              <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">
+              <code className="font-mono bg-gray-100 dark:bg-slate-800 px-1 py-0.5 rounded">
                 ANTHROPIC_BASE_URL
               </code>{" "}
               to point at the proxy.
@@ -206,8 +207,10 @@ export default function RequestsForSession() {
                   params.sessionId ?? ""
                 )}?${nextParams.toString()}`}
                 replace
-                className={`block px-4 py-3 transition-colors border-b border-gray-100 last:border-b-0 ${
-                  isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+                className={`block px-4 py-3 transition-colors border-b border-gray-100 dark:border-slate-800 last:border-b-0 ${
+                  isSelected
+                    ? "bg-blue-50 dark:bg-blue-900/30"
+                    : "hover:bg-gray-50 dark:hover:bg-slate-800"
                 }`}
               >
                 <div className="flex items-start justify-between">
@@ -219,7 +222,7 @@ export default function RequestsForSession() {
                       {req.routedModel &&
                         req.originalModel &&
                         req.routedModel !== req.originalModel && (
-                          <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-medium flex items-center space-x-1">
+                          <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded font-medium flex items-center space-x-1">
                             <ArrowLeftRight className="w-3 h-3" />
                             <span>routed</span>
                           </span>
@@ -234,7 +237,7 @@ export default function RequestsForSession() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-600 font-mono mb-1 truncate">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 font-mono mb-1 truncate">
                       {getChatCompletionsEndpoint(
                         req.routedModel,
                         req.endpoint
@@ -242,8 +245,8 @@ export default function RequestsForSession() {
                     </div>
                     <div className="flex items-center space-x-3 text-xs">
                       {req.response?.body?.usage && (
-                        <span className="font-mono text-gray-600">
-                          <span className="font-medium text-gray-900">
+                        <span className="font-mono text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
                             {(
                               (req.response.body.usage.input_tokens || 0) +
                               (req.response.body.usage.output_tokens || 0)
@@ -253,8 +256,8 @@ export default function RequestsForSession() {
                         </span>
                       )}
                       {req.response?.responseTime && (
-                        <span className="font-mono text-gray-600">
-                          <span className="font-medium text-gray-900">
+                        <span className="font-mono text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
                             {(req.response.responseTime / 1000).toFixed(2)}
                           </span>
                           s
@@ -263,10 +266,10 @@ export default function RequestsForSession() {
                     </div>
                   </div>
                   <div className="flex-shrink-0 text-right">
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       {new Date(req.timestamp).toLocaleDateString()}
                     </div>
-                    <div className="text-xs text-gray-400">
+                    <div className="text-xs text-gray-400 dark:text-gray-500">
                       {new Date(req.timestamp).toLocaleTimeString()}
                     </div>
                   </div>
@@ -280,12 +283,12 @@ export default function RequestsForSession() {
   );
 
   const detailPane = selected ? (
-    <div className="bg-white border border-gray-200 rounded-lg h-full flex flex-col ml-2">
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg h-full flex flex-col ml-2">
+      <div className="bg-gray-50 dark:bg-slate-800 px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
           Request Details
         </h2>
-        <span className="text-xs font-mono text-gray-500">
+        <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
           {selected.requestId}
         </span>
       </div>
@@ -306,12 +309,12 @@ export default function RequestsForSession() {
       </div>
     </div>
   ) : (
-    <div className="bg-white border border-gray-200 rounded-lg h-full flex items-center justify-center ml-2">
-      <div className="text-center text-gray-500 px-6 py-10">
-        <h3 className="text-sm font-medium text-gray-600 mb-1">
+    <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg h-full flex items-center justify-center ml-2">
+      <div className="text-center text-gray-500 dark:text-gray-400 px-6 py-10">
+        <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
           Select a request
         </h3>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Pick a request from the list to see its details here.
         </p>
       </div>

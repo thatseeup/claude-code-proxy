@@ -120,7 +120,7 @@ export default function HorizontalSplit({
         tabIndex={0}
         onMouseDown={handleMouseDown}
         onKeyDown={handleKeyDown}
-        className="shrink-0 w-1.5 cursor-col-resize bg-gray-200 hover:bg-gray-300 focus:bg-gray-400 focus:outline-none transition-colors"
+        className="shrink-0 w-1.5 cursor-col-resize bg-gray-200 hover:bg-gray-300 focus:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus:bg-slate-500 focus:outline-none transition-colors"
       />
       <div className="flex-1 min-w-0 h-full overflow-hidden">{right}</div>
     </div>

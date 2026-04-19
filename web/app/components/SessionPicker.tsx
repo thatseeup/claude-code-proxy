@@ -114,7 +114,7 @@ export default function SessionPicker({
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center gap-1 border-b border-gray-200 px-2 py-2 bg-white"
+      className="relative flex items-center gap-1 border-b border-gray-200 dark:border-slate-700 px-2 py-2 bg-white dark:bg-slate-900"
     >
       <button
         type="button"
@@ -122,26 +122,28 @@ export default function SessionPicker({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label="Switch session"
-        className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-gray-200 bg-white hover:bg-gray-50 text-xs"
+        className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs"
       >
         <div className="min-w-0 flex flex-col items-start">
           <span
             className={`font-mono truncate ${
-              activeSessionId === UNKNOWN_TOKEN ? "italic text-gray-500" : "text-gray-800"
+              activeSessionId === UNKNOWN_TOKEN
+                ? "italic text-gray-500 dark:text-gray-400"
+                : "text-gray-800 dark:text-gray-100"
             }`}
             title={activeSessionId === UNKNOWN_TOKEN ? "Unknown" : activeSessionId}
           >
             {activeLabel}
           </span>
           {activeSummary ? (
-            <span className="text-[10px] text-gray-500">
+            <span className="text-[10px] text-gray-500 dark:text-gray-400">
               {activeSummary.requestCount} req ·{" "}
               {formatFirstSeen(activeSummary.firstTimestamp)}
             </span>
           ) : null}
         </div>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-gray-500 shrink-0 transition-transform ${
+          className={`w-3.5 h-3.5 text-gray-500 dark:text-gray-400 shrink-0 transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -152,7 +154,7 @@ export default function SessionPicker({
         disabled={isDeleting || sessions.length === 0}
         aria-label={`Delete session ${activeLabel}`}
         title="Delete session"
-        className="shrink-0 p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+        className="shrink-0 p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
       >
         <Trash2 className="w-4 h-4" />
       </button>
@@ -160,7 +162,7 @@ export default function SessionPicker({
       {open && sessions.length > 0 ? (
         <div
           role="listbox"
-          className="absolute left-2 right-2 top-full mt-1 z-20 max-h-80 overflow-auto rounded border border-gray-200 bg-white shadow-lg"
+          className="absolute left-2 right-2 top-full mt-1 z-20 max-h-80 overflow-auto rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg"
         >
           <ul className="py-1">
             {sessions.map((s) => {
@@ -173,24 +175,26 @@ export default function SessionPicker({
                     role="option"
                     aria-selected={isActive}
                     onClick={() => handleSelect(token)}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
-                      isActive ? "bg-blue-50" : ""
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-slate-700 ${
+                      isActive ? "bg-blue-50 dark:bg-blue-900/40" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={`font-mono truncate ${
-                          s.sessionId === "" ? "italic text-gray-500" : "text-gray-800"
+                          s.sessionId === ""
+                            ? "italic text-gray-500 dark:text-gray-400"
+                            : "text-gray-800 dark:text-gray-100"
                         }`}
                         title={s.sessionId || "Unknown"}
                       >
                         {shortLabel(s.sessionId)}
                       </span>
-                      <span className="shrink-0 text-[10px] text-gray-500">
+                      <span className="shrink-0 text-[10px] text-gray-500 dark:text-gray-400">
                         {s.requestCount}
                       </span>
                     </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
                       {formatFirstSeen(s.firstTimestamp)}
                     </div>
                   </button>

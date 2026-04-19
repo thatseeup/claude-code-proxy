@@ -38,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function ConversationsLayout() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950">
       <TopNav />
       <main className="w-full px-4 py-6">
         <Outlet />
