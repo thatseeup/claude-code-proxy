@@ -43,11 +43,11 @@ claude-code-proxy/
         openai.go             — Anthropic→OpenAI 요청 변환, OpenAI→Anthropic 응답/스트림 변환
       service/
         anthropic.go          — (레거시) AnthropicService, 직접 /v1/messages 포워딩
-        conversation.go       — ~/.claude/projects/*.jsonl 파싱 (Claude Code 대화 기록)
+        conversation.go       — ~/.claude/projects/*.jsonl 파싱 (Claude Code 대화 기록) + `GetProjects()` 프로젝트 요약 (mtime DESC)
         model_router.go       — 모델 prefix 매칭 + subagent 해시 매칭 라우팅 결정
         model_router_test.go  — 라우터 edge case 테스트
-        storage.go            — StorageService 인터페이스 정의
-        storage_sqlite.go     — SQLite 구현체, requests 테이블 스키마 정의
+        storage.go            — StorageService 인터페이스 정의 (`GetRequestsBySessionID`, `GetSessionSummaries`, `DeleteRequestsBySessionID` 포함), SessionSummary 타입
+        storage_sqlite.go     — SQLite 구현체, requests 테이블 스키마 정의 (`session_id` 컬럼 + `idx_session_id` 포함)
 
   web/                        — Remix 프론트엔드 (Node >= 20, Vite 6)
     package.json              — scripts: build/dev/lint/start/typecheck
@@ -59,11 +59,21 @@ claude-code-proxy/
       entry.client.tsx / entry.server.tsx — Remix SSR entry
       tailwind.css
       routes/
-        _index.tsx            — 메인 대시보드 UI (요청 목록, 상세, 대화 뷰)
-        api.requests.tsx      — /api/requests GET/DELETE — backend 3001 프록시
-        api.conversations.tsx — /api/conversations GET — backend 3001 프록시
-        api.grade-prompt.tsx  — /api/grade-prompt POST — backend 3001 프록시 (현재 backend 엔드포인트 없음)
+        _index.tsx                     — `/` → `/requests` redirect only
+        requests.tsx                   — `/requests` parent layout: TopNav + SessionSidebar + `<Outlet/>`. loader 가 `/api/sessions` 조회 후 pathname === "/requests" 이면 최근 세션으로 redirect
+        requests.$sessionId.tsx        — `/requests/:sessionId` 요청 목록 + 상세. `sessionId === "unknown"` → Unknown 버킷. 선택된 요청은 `?rid=` 쿼리, 모델 필터는 `?model=` 쿼리
+        conversations.tsx              — `/conversations` parent layout: TopNav + ProjectSidebar + `<Outlet/>`. loader 가 `/api/projects` 조회 후 pathname === "/conversations" 이면 최근 프로젝트로 redirect
+        conversations.$projectId.tsx   — `/conversations/:projectId` 대화 목록 + 상세. 선택된 대화는 `?sid=` 쿼리
+        api.requests.tsx               — /api/requests GET/DELETE — backend 3001 프록시 (신규 UI 는 loader 에서 직접 백엔드 호출, 이 프록시는 현재 미사용)
+        api.conversations.tsx          — /api/conversations GET — backend 3001 프록시 (신규 UI 는 loader 에서 직접 백엔드 호출)
+        api.sessions.tsx               — /api/sessions GET — 세션 요약 프록시
+        api.sessions.$sessionId.tsx    — /api/sessions/:id DELETE — 세션 단위 삭제 프록시
+        api.projects.tsx               — /api/projects GET — 프로젝트 요약 프록시
+        api.grade-prompt.tsx           — /api/grade-prompt POST — backend 3001 프록시 (현재 backend 엔드포인트 없음)
       components/
+        TopNav.tsx               — 상단 Requests / Conversations NavLink
+        SessionSidebar.tsx       — `/requests` 세션 목록 + 행별 휴지통(fetcher DELETE → `/api/sessions/:id`)
+        ProjectSidebar.tsx       — `/conversations` 프로젝트 목록 (삭제 버튼 없음 — jsonl 보호)
         RequestDetailContent.tsx — 요청/응답 상세 뷰 컨테이너
         ConversationThread.tsx   — 대화 스레드 표시
         MessageContent.tsx       — 메시지 본문 렌더링
@@ -144,10 +154,20 @@ CREATE TABLE requests (
   model TEXT,                       -- 최종 라우팅된 모델
   original_model TEXT,              -- 클라이언트가 보낸 모델
   routed_model TEXT,                -- 라우터가 선택한 타겟 모델
+  session_id TEXT,                  -- X-Claude-Code-Session-Id (빈 값 = Unknown)
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
--- indexes: timestamp DESC, endpoint, model
+-- indexes: timestamp DESC, endpoint, model, session_id
 ```
+
+### Backend API 엔드포인트 (cmd/proxy/main.go)
+- `POST /v1/messages` — Claude Code 프록시 본체
+- `GET /api/requests` — 요청 목록 (쿼리: `model`, `sessionId`, `page`, `limit`). `sessionId=unknown` → Unknown 버킷
+- `GET /api/sessions` — 세션 요약 `[{sessionId, firstTimestamp, lastTimestamp, requestCount}]` (lastTimestamp DESC)
+- `DELETE /api/sessions/{id}` — 세션 단위 삭제. `id=unknown` 이면 Unknown 버킷 삭제
+- `GET /api/projects` — Claude Code 프로젝트 요약 `[{projectPath, displayName, lastMTime, conversationCount}]` (lastMTime DESC)
+- `GET /api/conversations/project?project=<path>` — 특정 프로젝트의 대화 목록 (mux 등록 순서 중요: `/project` 를 `{id}` 보다 먼저)
+- `GET /api/conversations/{id}` — 특정 세션의 대화
 
 ### Go 주요 타입 (model/models.go)
 - `RequestLog` — 요청 저장 단위 (위 컬럼과 매핑)

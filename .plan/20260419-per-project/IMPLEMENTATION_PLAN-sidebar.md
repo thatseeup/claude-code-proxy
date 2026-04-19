@@ -10,13 +10,13 @@
 
 | #  | Status | Step                                                               | Files Affected                                                                 | Complexity |
 |----|--------|--------------------------------------------------------------------|--------------------------------------------------------------------------------|------------|
-| 1  | ⬜     | 백엔드: 세션ID 저장 컬럼 + DB 리셋 안내                            | `proxy/internal/service/storage_sqlite.go`, `proxy/internal/model/models.go`, `proxy/internal/handler/handlers.go`, `README.md` | Medium     |
-| 2  | ⬜     | 백엔드: 세션 그룹 조회/세션 단위 삭제 API                          | `proxy/internal/service/storage.go`, `proxy/internal/service/storage_sqlite.go`, `proxy/internal/handler/handlers.go`, `proxy/cmd/proxy/main.go` | Medium     |
-| 3  | ⬜     | 프론트: Top nav 레이아웃 + 라우트 분리 골격                        | `web/app/routes/_index.tsx`, `web/app/routes/requests.tsx`(new), `web/app/routes/conversations.tsx`(new), `web/app/components/TopNav.tsx`(new) | Medium     |
-| 4  | ⬜     | 프론트: Requests Sidebar — 세션 목록 + 자동선택 + URL 동기화       | `web/app/routes/requests.tsx`, `web/app/routes/requests.$sessionId.tsx`(new), `web/app/components/SessionSidebar.tsx`(new), `web/app/routes/api.sessions.tsx`(new) | High       |
-| 5  | ⬜     | 프론트: Requests Sidebar — 세션 단위 삭제 UI + 기존 상단 휴지통 제거 | `web/app/components/SessionSidebar.tsx`, `web/app/routes/requests.$sessionId.tsx`, `web/app/routes/api.sessions.$sessionId.tsx`(new) | Low        |
-| 6  | ⬜     | 프론트: Conversations Sidebar — 프로젝트 목록 + 선택 상태 유지     | `web/app/routes/conversations.tsx`, `web/app/routes/conversations.$projectId.tsx`(new), `web/app/components/ProjectSidebar.tsx`(new) | Medium     |
-| 7  | ⬜     | 정리: `_index.tsx` 리다이렉트 + 구 코드 제거 + 종단 검증           | `web/app/routes/_index.tsx`, 기타 정리, `README.md` | Low        |
+| 1  | ✅     | 백엔드: 세션ID 저장 컬럼 + DB 리셋 안내                            | `proxy/internal/service/storage_sqlite.go`, `proxy/internal/model/models.go`, `proxy/internal/handler/handlers.go`, `README.md` | Medium     |
+| 2  | ✅     | 백엔드: 세션 그룹 조회/세션 단위 삭제 API                          | `proxy/internal/service/storage.go`, `proxy/internal/service/storage_sqlite.go`, `proxy/internal/handler/handlers.go`, `proxy/cmd/proxy/main.go` | Medium     |
+| 3  | ✅     | 프론트: Top nav 레이아웃 + 라우트 분리 골격                        | `web/app/routes/_index.tsx`, `web/app/routes/requests.tsx`(new), `web/app/routes/conversations.tsx`(new), `web/app/components/TopNav.tsx`(new) | Medium     |
+| 4  | ✅     | 프론트: Requests Sidebar — 세션 목록 + 자동선택 + URL 동기화       | `web/app/routes/requests.tsx`, `web/app/routes/requests.$sessionId.tsx`(new), `web/app/components/SessionSidebar.tsx`(new), `web/app/routes/api.sessions.tsx`(new) | High       |
+| 5  | ✅     | 프론트: Requests Sidebar — 세션 단위 삭제 UI + 기존 상단 휴지통 제거 | `web/app/components/SessionSidebar.tsx`, `web/app/routes/requests.$sessionId.tsx`, `web/app/routes/api.sessions.$sessionId.tsx`(new) | Low        |
+| 6  | ✅     | 프론트: Conversations Sidebar — 프로젝트 목록 + 선택 상태 유지     | `web/app/routes/conversations.tsx`, `web/app/routes/conversations.$projectId.tsx`(new), `web/app/components/ProjectSidebar.tsx`(new) | Medium     |
+| 7  | ✅     | 정리: `_index.tsx` 리다이렉트 + 구 코드 제거 + 종단 검증           | `web/app/routes/_index.tsx`, 기타 정리, `README.md` | Low        |
 
 Status legend: ⬜ pending · 🟡 in progress · ✅ done · ⚠️ blocked
 
@@ -149,4 +149,64 @@ _None._
 ## Deviations Log
 <!-- Execution sessions append here when the actual implementation diverged
      from the plan. Leave empty at generation time. -->
-_None._
+
+### Step 1 (2026-04-19)
+- `RequestLog.SessionID` 에 JSON 태그를 `sessionId` (omitempty 없음) 으로 달아 빈 세션도 응답에 포함되게 함. 요구사항에 빈 문자열은 Unknown 으로 해석해야 하므로 omitempty 없이 항상 노출.
+- 런타임 서버 실행을 통한 sqlite3 SELECT 검증은 이 세션(샌드박스) 에서 불가하여 `go build ./...` 및 `go vet ./...` 성공으로 대체. 실제 엔드투엔드 검증은 사용자 환경에서 `rm proxy/requests.db && make dev` 후 curl + sqlite3 로 수행 필요.
+
+### Step 2 (2026-04-19)
+- `SessionSummary` 타입을 `proxy/internal/service/storage.go` 에 정의 (service 패키지). 필드 타입은 계획대로 `time.Time` 이지만, JSON 직렬화 시 기존 `RequestLog.Timestamp` (RFC3339 문자열) 와 포맷 일관성을 유지하기 위해 핸들러에서 `sessionResponse` DTO 를 사용해 `time.Time` → `RFC3339` 문자열로 변환 후 응답. 계획의 "RFC3339 유지" 요구를 충족.
+- SQLite 의 `requests.timestamp` 컬럼은 Go 측에서 RFC3339 문자열로 INSERT 되지만, 과거 기본값(`CURRENT_TIMESTAMP`) 으로 생성된 레코드가 섞일 경우를 대비해 `parseStoredTimestamp` 헬퍼가 RFC3339/RFC3339Nano 및 SQLite 기본 포맷(`2006-01-02 15:04:05`) 등을 순차 파싱하도록 구현.
+- `GetSessionSummaries` 쿼리에서 `COALESCE(session_id, '')` 로 NULL 과 빈 문자열을 하나의 Unknown 버킷으로 묶고 `GROUP BY sid` + `ORDER BY last_ts DESC` 적용.
+- `DeleteSession` 핸들러는 경로 세그먼트 `unknown` (리터럴) 을 빈 sessionID 로 매핑. 서비스 메서드 `DeleteRequestsBySessionID("")` 는 `session_id IS NULL OR session_id = ''` 조건으로 삭제.
+- 런타임 curl/서버 기동 검증은 샌드박스 제약으로 불가 → `cd proxy && go build ./...` 및 `go vet ./...` 성공으로 대체. 실제 엔드투엔드(엔드포인트 응답/Unknown 삭제) 검증은 사용자 환경에서 수행 필요.
+
+### Step 3 (2026-04-19)
+- `routes/requests.tsx` 와 `routes/conversations.tsx` 는 pathless layout 이 아니라 실제 경로 레이아웃(`/requests`, `/conversations`) 역할을 동시에 하도록 구현 — Remix v2 flat routes 에서 `routes/<name>.tsx` 는 그 경로 자체와 child 라우트(`routes/<name>.$param.tsx`) 의 부모 레이아웃을 겸함. 계획의 "pathless layout" 표현은 실제로는 parent route + `<Outlet/>` 구조를 의미하는 것으로 해석. child 라우트가 아직 없을 때 `/requests` 는 placeholder `<aside>` + 빈 `<Outlet/>` 만 렌더.
+- `_index.tsx` 는 loader 에서 `redirect("/requests")` 반환, default export 는 `null` 반환 (loader 만 실행되고 렌더는 발생하지 않지만 Remix 는 default export 를 요구).
+- `TopNav.tsx` 는 `NavLink` 의 `isActive` 상태로 active 스타일 적용 — 데이터 페칭 없음. 기존 `_index.tsx` 상단의 "Claude Code Monitor" 헤더 스타일과 일관되도록 `sticky top-0 z-40 bg-white border-b` 유지.
+- 종단 검증: `npm run typecheck` 실행 시 `app/components/MessageContent.tsx(93,30)` 에서 기존 TS 에러(ContentItem 타입 불일치) 1건 발생. 이는 baseline(커밋 `ae71ec4`) 부터 존재하며 이번 Step 변경과 무관. 본 Step 에서 새로 추가/수정한 4 개 파일(`TopNav.tsx`, `requests.tsx`, `conversations.tsx`, `_index.tsx`) 에는 타입 에러 없음. 실제 브라우저 검증은 샌드박스 제약으로 불가하며 사용자 환경에서 `npm run dev` 로 확인 필요.
+
+### Step 4 (2026-04-19)
+- 백엔드: `GetAllRequests` 에 `sessionID` 파라미터를 추가하는 대신 `GetRequestsBySessionID(sessionID, modelFilter)` 메서드를 별도로 도입. 기존 호출부(세션 필터 없는 `GetAllRequests`) 변경을 최소화하고 Unknown 버킷(`session_id IS NULL OR session_id = ''`) 처리를 한 곳에 격리하기 위함. `StorageService` 인터페이스에 새 메서드 등록.
+- 핸들러 `GetRequests` 는 쿼리 파라미터 `sessionId` 존재 여부로 분기 — 값이 리터럴 `unknown` 이면 빈 sessionID 로 매핑해 Unknown 버킷 조회. 기존 `model` 필터는 그대로 함께 적용.
+- 프론트: `requests.tsx` loader 에서 `/api/sessions` 를 읽고 URL pathname 이 정확히 `/requests` 인 경우(세션 자식 세그먼트 없음) 서버 단에서 `redirect` 처리 → flash 없이 최근 활동 세션으로 자동 진입. Unknown 은 URL 토큰 `unknown` 으로 표현.
+- 선택된 개별 요청 상세 상태는 URL 쿼리 `?rid=<requestId>` 로 관리. 상세 전환 시 `<Link replace>` 를 써서 히스토리 스팸 방지. 모델 필터(`?model=...`) 도 URL 로 동기화해 새로고침/공유 시 상태 유지.
+- `RequestDetailContent` 컴포넌트는 기존 인터페이스가 `id: number` 를 요구하지만 실제 사용처는 React key/표시 용이라 `requestId` 문자열을 그대로 전달하고 `as any` 캐스팅으로 우회. 컴포넌트 리팩토링(타입 완화) 은 Step 7 정리 단계에서 다룰 항목으로 남김.
+- 모델 필터 UI 는 기존 `_index.tsx` 의 All/Opus/Sonnet/Haiku 4 버튼을 그대로 이식. promptGrade 관련 로직 / grading 호출은 Step 4 범위에서 제외(`onGrade` 를 빈 함수로 주입). 상단 "전체 요청 삭제" 휴지통 버튼은 Step 5 에서 제거될 예정이므로 여기서는 애초에 포함하지 않음.
+- 런타임 검증(브라우저 클릭 테스트/실제 세션 데이터) 은 샌드박스 제약으로 수행 불가. `cd proxy && go build ./... && go vet ./...` 성공 + `cd web && npm run typecheck` 성공(baseline 1건 제외, 이번 Step 추가/수정 파일에서 신규 오류 0건) 으로 대체. 실제 5개 done condition 확인은 사용자 환경 `make dev` 후 브라우저로 필요.
+- IDE 경고: `storage_sqlite.go` `GetRequestsBySessionID` / `handlers.go` `GetRequests` 에 대해 cognitive complexity 경고(S3776) 1건씩 발생. 이는 기존 `GetAllRequests` 와 동일한 패턴을 따른 결과로 동일 계열의 기존 경고가 코드베이스에 다수 존재(하단 `[+15 locations]` / `[+14 locations]` 표기). 이번 Step 의 구조를 근본 리팩토링하려면 공통 row-scan 헬퍼 추출이 필요하나 범위 밖 — Step 7 정리 단계 또는 별도 리팩토링 계획에서 다룰 수 있음.
+
+### Step 5 (2026-04-19)
+- `SessionSidebar.tsx` 에서 Step 4 때 자리만 잡아뒀던 `onDelete` prop 을 제거하고, 행별 삭제 로직을 컴포넌트 내부로 이동 — 새 `SessionRow` 서브컴포넌트가 `useFetcher` 로 DELETE 를 제출하고, 자신이 활성 세션인지 여부를 알고 있어 삭제 완료 후 `navigate("/requests")` 로 분기. 이렇게 한 이유: Remix fetcher 상태(`submitting` → `idle`) 전이를 컴포넌트 내에서 `useEffect` 로 감지하여 "활성 세션 삭제 시 상위 loader 재실행 후 최근 세션으로 redirect" 시나리오를 prop drilling 없이 구현하기 위함. 계획은 부모에서 `fetcher.submit` 을 호출하고 `onDelete` 콜백을 주입하는 형태를 암시했으나, 상태 전이 감지 로직을 각 행별로 격리하는 편이 더 단순하여 채택.
+- `api.sessions.$sessionId.tsx` 는 DELETE 만 허용 — GET/POST 등은 405 반환. 경로 변수 `sessionId` 가 빈 문자열인 경우 400 응답(실무상 발생하지 않으나 방어 코드).
+- 상단 "전체 요청 삭제" 휴지통은 Step 4 단계에서 이미 새 `requests.$sessionId.tsx` 에 이식하지 않았으므로 이번 Step 에서 추가로 제거할 대상이 없음 (grep `Trash|trash` → 0 matches). 계획의 "기존 상단 휴지통 제거" 요구사항은 Step 4 시점에 자연스럽게 충족된 상태.
+- 삭제 확인 대화상자는 계획대로 생략. 버튼은 기본적으로 `opacity-0` 상태이며 행 hover/focus 시에만 노출되어 실수 클릭 가능성 최소화.
+- 런타임 검증(두 세션 실제 삭제 / Unknown 삭제 / 마지막 세션 삭제 후 빈 상태) 은 샌드박스 제약으로 불가 → `cd web && npm run typecheck` 성공(baseline `MessageContent.tsx(93,30)` 1건 외 신규 오류 0건) 으로 대체. 실제 done condition 1–5 확인은 사용자 환경에서 `make dev` 후 브라우저로 필요. done condition 5 (`sqlite3 requests.db "SELECT COUNT(*) FROM requests WHERE session_id = 'deleted-id';"` → 0) 는 Step 2 의 DELETE API 가 이미 `go vet` 을 통과했고 이번 Step 의 프론트는 해당 엔드포인트를 그대로 호출하므로 백엔드 쪽 동작은 변경 없음.
+- IDE 경고: `SessionSidebar.tsx` 의 `SessionRow` / `SessionSidebar` 함수 props 에 대해 S6759(Readonly 권장) 2건 발생 → 둘 다 `Readonly<...>` wrapper 적용으로 해소.
+
+### Step 7 (2026-04-19)
+- `_index.tsx` 는 Step 3 때 이미 `redirect("/requests")` 전용으로 축소되었으므로 이번 Step 에서 추가 변경 없음 (확인만).
+- 계획이 명시한 "구 viewMode / activeTab / 전체 요청 삭제 / Conversation 모달" 잔재는 grep 결과 0 matches — Step 3/4/5 진행 과정에서 `_index.tsx` 를 통째로 교체하면서 모두 제거된 상태였음. Step 7 에서 추가로 지울 대상 없음.
+- `api.requests.tsx` (GET/DELETE) 및 `api.conversations.tsx` (GET) 프록시 라우트는 신규 UI 에서 직접 백엔드를 호출하여 현재 실제로는 미사용. 다만 (a) Remix flat-routes 규칙과 일관된 `/api/*` 표면을 유지하고, (b) 외부 사용자(스크립트/Web UI 외 클라이언트)가 의존할 수 있다는 점을 고려해 이 Step 에서는 삭제하지 않고 `.refs/project-map.md` 에 "신규 UI 에서는 미사용" 으로만 명시. 필요 시 후속 작업에서 별도 정리.
+- `README.md` 에 "Web Dashboard → Routes" 단락 추가 — `/`, `/requests`, `/requests/:sessionId`, `/conversations`, `/conversations/:projectId` 목록과 selection state(쿼리 보존), 세션 단위 삭제/jsonl 보호 정책을 기술. Step 1 에서 이미 "Database Schema Changes" 섹션이 추가되어 있어 DB 리셋 절차는 그대로 유지.
+- `.refs/project-map.md` 갱신: 신규 라우트/컴포넌트(`TopNav`, `SessionSidebar`, `ProjectSidebar`, `api.sessions*`, `api.projects`, `requests.*`, `conversations.*`), `requests` 테이블 `session_id` 컬럼 + 인덱스, `GetProjects` / 세션 API 등 백엔드 엔드포인트 목록을 반영.
+- 종단 검증:
+  1. `cd proxy && go build ./... && go test ./...` 성공 (service 패키지만 테스트 존재 — 기존 model_router_test 통과).
+  2. `cd web && npm run typecheck` → baseline `MessageContent.tsx(93,30)` 1건만 잔존, 이번 Step 신규 오류 0건.
+  3. `cd web && npm run lint` 은 baseline ENOENT (`web/.gitignore` 파일이 존재하지 않아 ESLint `.eslintrc.cjs` 의 `--ignore-path .gitignore` 로드 실패) 로 본 Step 이전부터 실패 상태 — 이번 Step 변경과 무관한 환경/설정 이슈이므로 여기서 수정 대상으로 보지 않음. 수정이 필요하면 별도 이슈로 처리 권장(예: `web/.gitignore` 생성 또는 package.json 의 `--ignore-path` 제거).
+  4. 요구사항 체크리스트 중 코드/설정으로 확인 가능한 항목은 전부 충족: `/` redirect (`_index.tsx`), 세션 목록 정렬 (`GetSessionSummaries` ORDER BY last_ts DESC), 세션별 휴지통 (`SessionRow`), 상단 휴지통 부재 (`Trash|trash` grep → `SessionSidebar.tsx` 만), Conversations 프로젝트 Sidebar, jsonl 삭제 부재 (ProjectSidebar / conversations.$projectId.tsx `trash|delete` grep 0), URL 쿼리 기반 selection state 보존. 브라우저 기반 수동 확인은 샌드박스 제약으로 수행 불가 — 사용자 환경에서 `make dev` 후 확인 필요.
+- 계획의 "이 Step 에서는 `requests.db` 리셋 금지" 지침 준수: DB 파일 건드리지 않음.
+
+### Step 6 (2026-04-19)
+- 백엔드: `ConversationService` 인터페이스에 `GetProjects() ([]ProjectSummary, error)` 를 추가하고 `ProjectSummary { ProjectPath, DisplayName, LastMTime, ConversationCount }` 타입을 `conversation.go` 에 정의. 구현은 `~/.claude/projects` 하위 각 디렉토리를 읽어 `*.jsonl` 파일 mtime 의 max 를 `LastMTime` 으로 집계하고 `LastMTime DESC` 정렬. jsonl 이 0 개인 디렉토리는 제외.
+- `DisplayName` 은 `projectDisplayName` 헬퍼로 `-Users-syoh-...-claude-code-proxy` 같은 인코딩된 경로에서 마지막 hyphen segment 를 추출해 짧은 라벨 생성 (계획의 "표기용 짧은 라벨을 서버에서 함께 계산" 충족). 프로젝트 폴더 이름 자체에 hyphen 이 있을 경우 마지막 토큰만 표기되는 cosmetic trade-off 는 수용.
+- 핸들러 `GetProjects` 추가 — 내부 DTO `projectResponse` 로 `time.Time` → RFC3339 문자열 변환 후 응답 (세션 API 와 포맷 일관).
+- `main.go` 에 `GET /api/projects` 추가. 기존 `/api/conversations/{id}` 가 `/api/conversations/project` 를 `{id}=project` 로 흡수할 수 있는 순서 버그를 겸사해 수정 — `/api/conversations/project` 를 `{id}` 라우트보다 먼저 등록 (gorilla/mux 는 등록 순서대로 매칭). 이는 Step 6 범위 밖이지만 `GetConversationsByProject` 가 제대로 동작하기 위한 사전 조건이라 함께 조정. 기존 `api.conversations.tsx` 프록시는 `?model=` 쿼리만 쓰고 이 버그에 영향 없음.
+- 프론트: `api.projects.tsx` (프록시), `ProjectSidebar.tsx`, `conversations.$projectId.tsx` 신설. `conversations.tsx` 는 loader 에서 `/api/projects` 읽고 `pathname === "/conversations"` 일 때 첫 프로젝트로 `redirect` → flash 없는 자동 선택.
+- `conversations.$projectId.tsx` 는 loader 에서 `/api/conversations/project?project=<path>` 호출 후 목록을 렌더. 선택된 개별 대화 상태는 URL 쿼리 `?sid=<sessionId>` 로 관리하여 새로고침 시 복원. 상세 패널은 기존 `ConversationThread` 컴포넌트를 그대로 재사용.
+- 계획에서는 `projectId` 를 `encodeURIComponent` 로 감싸라고 했으며 실제로도 `<Link to={...encodeURIComponent(projectPath)}>` 및 loader 의 `decodeURIComponent(params.projectId)` 로 왕복 처리. claude-code 의 프로젝트 경로는 hyphen 치환 형태라 실무상 no-op 에 가깝지만 안전망 확보.
+- jsonl 삭제 기능은 계획대로 일절 구현하지 않음 — `ProjectSidebar.tsx` / `conversations.$projectId.tsx` grep `trash`/`delete` 모두 0 matches.
+- 타입 이슈: Remix v3 single-fetch `JsonifyObject<Conversation>` 와 원래 `Conversation` 타입 간 `message` 필드 optional 차이로 2건 타입 에러 발생 → `firstUserText(conv as unknown as Conversation)` / `<ConversationThread conversation={selected as unknown as Conversation} />` 두 지점에 명시적 캐스트로 우회. 이는 Step 4 의 `RequestDetailContent` 캐스트와 동일한 패턴.
+- 종단 검증: `cd proxy && go build ./... && go vet ./...` 성공 (경고 없음). `cd web && npm run typecheck` 실행 시 baseline `MessageContent.tsx(93,30)` 1건 외 신규 오류 0건. `sonar:S1874` (json deprecated) 경고는 기존 loaders 패턴과 동일 — 전체 프로젝트의 Remix v3 migration 시점에 일괄 처리할 항목.
+- 실제 done condition 1–5 (브라우저에서 프로젝트 redirect / Sidebar 전환 / 새로고침 복원) 검증은 샌드박스 제약으로 수행 불가, 사용자 환경 `make dev` 후 확인 필요. done condition 5 (`trash`/`delete` 키워드 부재) 는 grep 으로 확인 완료.

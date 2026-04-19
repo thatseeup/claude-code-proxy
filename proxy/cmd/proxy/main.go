@@ -66,9 +66,12 @@ func main() {
 	r.HandleFunc("/ui", h.UI).Methods("GET")
 	r.HandleFunc("/api/requests", h.GetRequests).Methods("GET")
 	r.HandleFunc("/api/requests", h.DeleteRequests).Methods("DELETE")
+	r.HandleFunc("/api/sessions", h.GetSessions).Methods("GET")
+	r.HandleFunc("/api/sessions/{id}", h.DeleteSession).Methods("DELETE")
+	r.HandleFunc("/api/projects", h.GetProjects).Methods("GET")
 	r.HandleFunc("/api/conversations", h.GetConversations).Methods("GET")
-	r.HandleFunc("/api/conversations/{id}", h.GetConversationByID).Methods("GET")
 	r.HandleFunc("/api/conversations/project", h.GetConversationsByProject).Methods("GET")
+	r.HandleFunc("/api/conversations/{id}", h.GetConversationByID).Methods("GET")
 
 	r.NotFoundHandler = http.HandlerFunc(h.NotFound)
 

@@ -15,6 +15,17 @@ type ConversationService interface {
 	GetConversations() (map[string][]*Conversation, error)
 	GetConversation(projectPath, sessionID string) (*Conversation, error)
 	GetConversationsByProject(projectPath string) ([]*Conversation, error)
+	GetProjects() ([]ProjectSummary, error)
+}
+
+// ProjectSummary is a compact view of a project directory under
+// ~/.claude/projects. LastMTime is the max mtime across that directory's
+// jsonl files, used as the sidebar sort key.
+type ProjectSummary struct {
+	ProjectPath       string    `json:"projectPath"`
+	DisplayName       string    `json:"displayName"`
+	LastMTime         time.Time `json:"lastMTime"`
+	ConversationCount int       `json:"conversationCount"`
 }
 
 type conversationService struct {
@@ -155,6 +166,92 @@ func (cs *conversationService) GetConversationsByProject(projectPath string) ([]
 	})
 
 	return conversations, nil
+}
+
+// GetProjects returns a summary of each project directory under
+// claudeProjectsPath, sorted by the most-recent jsonl mtime (DESC).
+// Directories without any jsonl files are skipped.
+func (cs *conversationService) GetProjects() ([]ProjectSummary, error) {
+	entries, err := os.ReadDir(cs.claudeProjectsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []ProjectSummary{}, nil
+		}
+		return nil, fmt.Errorf("failed to read claude projects directory: %w", err)
+	}
+
+	summaries := make([]ProjectSummary, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		projectPath := entry.Name()
+		projectDir := filepath.Join(cs.claudeProjectsPath, projectPath)
+
+		files, err := os.ReadDir(projectDir)
+		if err != nil {
+			continue
+		}
+
+		var (
+			lastMTime time.Time
+			count     int
+		)
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".jsonl") {
+				continue
+			}
+			info, err := f.Info()
+			if err != nil {
+				continue
+			}
+			count++
+			if info.ModTime().After(lastMTime) {
+				lastMTime = info.ModTime()
+			}
+		}
+
+		if count == 0 {
+			continue
+		}
+
+		summaries = append(summaries, ProjectSummary{
+			ProjectPath:       projectPath,
+			DisplayName:       projectDisplayName(projectPath),
+			LastMTime:         lastMTime,
+			ConversationCount: count,
+		})
+	}
+
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].LastMTime.After(summaries[j].LastMTime)
+	})
+
+	return summaries, nil
+}
+
+// projectDisplayName derives a short human-readable label from Claude Code's
+// encoded project path (e.g. "-Users-syoh-Development-thatseeup-claude-code-proxy"
+// → "claude-code-proxy"). Falls back to the raw path when no hyphen is found.
+func projectDisplayName(projectPath string) string {
+	trimmed := strings.TrimPrefix(projectPath, "-")
+	if trimmed == "" {
+		return projectPath
+	}
+
+	// Split on hyphens and return the last non-empty segment as the label —
+	// claude-code's encoding replaces path separators with hyphens, so the
+	// final segment is typically the project directory name. For projects
+	// whose own folder name contains hyphens, this yields only the last
+	// token, which is a minor cosmetic loss acceptable for sidebar use.
+	parts := strings.Split(trimmed, "-")
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] != "" {
+			return parts[i]
+		}
+	}
+	return projectPath
 }
 
 // parseConversationFile reads and parses a JSONL conversation file

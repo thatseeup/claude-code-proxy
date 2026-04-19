@@ -297,11 +297,33 @@ claude-code-proxy/
 - Request/response body inspection
 - Conversation threading
 
+### Database Schema Changes
+
+This project does not perform schema migrations. When the database schema is
+changed (for example, a new column is added to the `requests` table), delete
+the existing SQLite file and restart the server so the table is recreated:
+
+```bash
+rm -f proxy/requests.db   # or whatever DB_PATH points to
+make dev
+```
+
+On Docker, remove the mounted `./data/requests.db` file instead.
+
 ### Web Dashboard
 - Real-time request streaming
 - Interactive request explorer
 - Conversation visualization
 - Performance metrics
+
+#### Routes
+- `/` — redirects to `/requests`
+- `/requests` — session sidebar + requests view; auto-redirects to the most recent session
+- `/requests/:sessionId` — requests for the selected session (`unknown` token maps to requests with no `X-Claude-Code-Session-Id` header)
+- `/conversations` — project sidebar + conversations view; auto-redirects to the most recent project
+- `/conversations/:projectId` — Claude Code `~/.claude/projects/<id>` conversations
+
+Selection state (selected request / conversation / model filter) is kept in the URL so reloads preserve the current view. Session-level delete lives on each sidebar row; there is no global "delete all" button, and jsonl conversation files are never deleted from the UI.
 
 ## License
 

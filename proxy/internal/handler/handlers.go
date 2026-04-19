@@ -88,6 +88,7 @@ func (h *Handler) Messages(w http.ResponseWriter, r *http.Request) {
 		RoutedModel:   decision.TargetModel,
 		UserAgent:     r.Header.Get("User-Agent"),
 		ContentType:   r.Header.Get("Content-Type"),
+		SessionID:     r.Header.Get("X-Claude-Code-Session-Id"),
 	}
 
 	if _, err := h.storageService.SaveRequest(requestLog); err != nil {
@@ -179,8 +180,26 @@ func (h *Handler) GetRequests(w http.ResponseWriter, r *http.Request) {
 		modelFilter = "all"
 	}
 
-	// Get all requests with model filter applied at storage level
-	allRequests, err := h.storageService.GetAllRequests(modelFilter)
+	// Optional sessionId filter — when present, restrict to that session.
+	// The literal path token "unknown" maps to the empty sessionID bucket.
+	sessionIDQuery, hasSessionFilter := "", false
+	if raw, ok := r.URL.Query()["sessionId"]; ok && len(raw) > 0 {
+		hasSessionFilter = true
+		sessionIDQuery = raw[0]
+		if sessionIDQuery == sessionPathUnknown {
+			sessionIDQuery = ""
+		}
+	}
+
+	var (
+		allRequests []*model.RequestLog
+		err         error
+	)
+	if hasSessionFilter {
+		allRequests, err = h.storageService.GetRequestsBySessionID(sessionIDQuery, modelFilter)
+	} else {
+		allRequests, err = h.storageService.GetAllRequests(modelFilter)
+	}
 	if err != nil {
 		log.Printf("Error getting requests: %v", err)
 		http.Error(w, "Failed to get requests", http.StatusInternalServerError)
@@ -239,6 +258,65 @@ func (h *Handler) DeleteRequests(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) NotFound(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(w, "Not found", http.StatusNotFound)
+}
+
+// sessionResponse mirrors service.SessionSummary but uses RFC3339 string
+// timestamps so the wire format matches RequestLog.Timestamp.
+type sessionResponse struct {
+	SessionID      string `json:"sessionId"`
+	FirstTimestamp string `json:"firstTimestamp"`
+	LastTimestamp  string `json:"lastTimestamp"`
+	RequestCount   int    `json:"requestCount"`
+}
+
+func (h *Handler) GetSessions(w http.ResponseWriter, r *http.Request) {
+	summaries, err := h.storageService.GetSessionSummaries()
+	if err != nil {
+		log.Printf("❌ Error getting session summaries: %v", err)
+		writeErrorResponse(w, "Failed to get sessions", http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]sessionResponse, 0, len(summaries))
+	for _, s := range summaries {
+		out = append(out, sessionResponse{
+			SessionID:      s.SessionID,
+			FirstTimestamp: s.FirstTimestamp.Format(time.RFC3339),
+			LastTimestamp:  s.LastTimestamp.Format(time.RFC3339),
+			RequestCount:   s.RequestCount,
+		})
+	}
+
+	writeJSONResponse(w, out)
+}
+
+// sessionPathUnknown is the literal path segment that maps to the empty
+// ("Unknown") session bucket.
+const sessionPathUnknown = "unknown"
+
+func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, ok := vars["id"]
+	if !ok {
+		writeErrorResponse(w, "Session ID is required", http.StatusBadRequest)
+		return
+	}
+
+	sessionID := id
+	if sessionID == sessionPathUnknown {
+		sessionID = ""
+	}
+
+	deleted, err := h.storageService.DeleteRequestsBySessionID(sessionID)
+	if err != nil {
+		log.Printf("❌ Error deleting session %q: %v", sessionID, err)
+		writeErrorResponse(w, "Failed to delete session", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSONResponse(w, map[string]interface{}{
+		"deleted": deleted,
+	})
 }
 
 func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, requestLog *model.RequestLog, startTime time.Time) {
@@ -672,6 +750,36 @@ func (h *Handler) GetConversationByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSONResponse(w, conversation)
+}
+
+// projectResponse mirrors service.ProjectSummary but uses RFC3339 strings
+// for timestamps to stay consistent with other API responses.
+type projectResponse struct {
+	ProjectPath       string `json:"projectPath"`
+	DisplayName       string `json:"displayName"`
+	LastMTime         string `json:"lastMTime"`
+	ConversationCount int    `json:"conversationCount"`
+}
+
+func (h *Handler) GetProjects(w http.ResponseWriter, r *http.Request) {
+	projects, err := h.conversationService.GetProjects()
+	if err != nil {
+		log.Printf("❌ Error getting projects: %v", err)
+		writeErrorResponse(w, "Failed to get projects", http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]projectResponse, 0, len(projects))
+	for _, p := range projects {
+		out = append(out, projectResponse{
+			ProjectPath:       p.ProjectPath,
+			DisplayName:       p.DisplayName,
+			LastMTime:         p.LastMTime.Format(time.RFC3339),
+			ConversationCount: p.ConversationCount,
+		})
+	}
+
+	writeJSONResponse(w, out)
 }
 
 func (h *Handler) GetConversationsByProject(w http.ResponseWriter, r *http.Request) {
