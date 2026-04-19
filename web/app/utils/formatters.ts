@@ -19,15 +19,25 @@ export function formatValue(value: any): string {
 }
 
 /**
+ * Formats headers as HTTP Raw Header format (e.g. "Header-Name: value")
+ */
+export function formatRawHeaders(headers: Record<string, string | string[]>): string {
+  if (!headers || typeof headers !== 'object') return '';
+  return Object.entries(headers)
+    .flatMap(([key, value]) =>
+      Array.isArray(value)
+        ? value.map((v) => `${key}: ${v}`)
+        : [`${key}: ${value}`]
+    )
+    .join('\n');
+}
+
+/**
  * Formats JSON with proper indentation and returns a formatted string
  */
-export function formatJSON(obj: any, maxLength: number = 1000): string {
+export function formatJSON(obj: any): string {
   try {
-    const jsonString = JSON.stringify(obj, null, 2);
-    if (jsonString.length > maxLength) {
-      return jsonString.substring(0, maxLength) + '...';
-    }
-    return jsonString;
+    return JSON.stringify(obj, null, 2);
   } catch (error) {
     return String(obj);
   }

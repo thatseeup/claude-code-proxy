@@ -21,7 +21,7 @@ import {
   Wrench
 } from 'lucide-react';
 import { MessageContent } from './MessageContent';
-import { formatJSON } from '../utils/formatters';
+import { formatJSON, formatRawHeaders } from '../utils/formatters';
 import { getChatCompletionsEndpoint, getProviderName } from '../utils/models';
 
 interface Request {
@@ -192,7 +192,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">Headers</span>
                 <button
-                  onClick={() => handleCopy(formatJSON(request.headers), 'headers')}
+                  onClick={() => handleCopy(formatRawHeaders(request.headers), 'headers')}
                   className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
                   title="Copy headers"
                 >
@@ -204,7 +204,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                 </button>
               </div>
               <pre className="text-sm text-gray-700 overflow-x-auto">
-                {formatJSON(request.headers)}
+                {formatRawHeaders(request.headers)}
               </pre>
             </div>
           </div>
@@ -736,7 +736,7 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-700">Headers</span>
                       <button
-                        onClick={() => handleCopy(formatJSON(response.headers), 'responseHeaders')}
+                        onClick={() => handleCopy(formatRawHeaders(response.headers), 'responseHeaders')}
                         className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
                         title="Copy response headers"
                       >
@@ -747,8 +747,8 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
                         )}
                       </button>
                     </div>
-                    <pre className="text-xs text-gray-700 overflow-x-auto">
-                      {formatJSON(response.headers)}
+                    <pre className="text-sm text-gray-700 overflow-x-auto">
+                      {formatRawHeaders(response.headers)}
                     </pre>
                   </div>
                 </div>
@@ -796,9 +796,7 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
                         )}
                       </button>
                     </div>
-                    <pre className="text-xs text-gray-700 overflow-x-auto max-h-96 overflow-y-auto">
-                      {response.body ? formatJSON(response.body) : response.bodyText}
-                    </pre>
+                    <CollapsibleJSON json={response.body ? formatJSON(response.body) : (response.bodyText || '')} />
                   </div>
                 </div>
               )}
@@ -919,6 +917,51 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
   );
 }
 
+// Collapsible JSON block with truncation
+const JSON_PREVIEW_LENGTH = 500;
+
+function CollapsibleJSON({ json }: { readonly json: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = json.length > JSON_PREVIEW_LENGTH;
+  const display = isLong && !expanded ? json.slice(0, JSON_PREVIEW_LENGTH) : json;
+
+  return (
+    <div>
+      <pre className="text-xs text-gray-700 overflow-x-auto font-mono whitespace-pre-wrap">{display}</pre>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="mt-1 text-xs text-blue-600 hover:text-blue-800 font-medium border border-blue-200 bg-blue-50 px-2 py-0.5 rounded"
+        >
+          {expanded ? 'Show less' : '(...)'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SchemaBlock({ schema, onCopy, copied }: { readonly schema: any; readonly onCopy: () => void; readonly copied: boolean }) {
+  const json = formatJSON(schema);
+  return (
+    <div className="mt-4">
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-700 flex items-center space-x-2">
+            <Settings className="w-3.5 h-3.5" />
+            <span>Input Schema</span>
+          </span>
+          <button onClick={onCopy} className="p-1 text-gray-500 hover:text-gray-700 transition-colors" title="Copy schema">
+            {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+        <div className="p-3">
+          <CollapsibleJSON json={json} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Tool Card Component
 function ToolCard({ tool, index }: { tool: any; index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -991,32 +1034,7 @@ function ToolCard({ tool, index }: { tool: any; index: number }) {
         </div>
         
         {tool.input_schema && (
-          <div className="mt-4">
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-700 flex items-center space-x-2">
-                  <Settings className="w-3.5 h-3.5" />
-                  <span>Input Schema</span>
-                </span>
-                <button
-                  onClick={handleCopySchema}
-                  className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                  title="Copy schema"
-                >
-                  {copiedSchema ? (
-                    <Check className="w-3.5 h-3.5 text-green-600" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              </div>
-              <div className="p-3">
-                <pre className="text-xs text-gray-700 overflow-x-auto font-mono">
-                  {formatJSON(tool.input_schema)}
-                </pre>
-              </div>
-            </div>
-          </div>
+          <SchemaBlock schema={tool.input_schema} onCopy={handleCopySchema} copied={copiedSchema} />
         )}
       </div>
     </div>
