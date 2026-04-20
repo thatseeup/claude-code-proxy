@@ -147,7 +147,7 @@ CREATE TABLE requests (
   method TEXT NOT NULL,
   endpoint TEXT NOT NULL,           -- /v1/messages 등
   headers TEXT NOT NULL,            -- JSON, 민감 헤더는 sha256:<hex>
-  body TEXT NOT NULL,               -- AnthropicRequest JSON
+  body_raw TEXT NOT NULL,           -- 원본 요청 바디 문자열 (단일 저장. 읽기 시 Unmarshal → RequestLog.Body 채움)
   user_agent TEXT,
   content_type TEXT,
   prompt_grade TEXT,                -- PromptGrade JSON (nullable)
@@ -171,7 +171,7 @@ CREATE TABLE requests (
 - `GET /api/conversations/{id}` — 특정 세션의 대화
 
 ### Go 주요 타입 (model/models.go)
-- `RequestLog` — 요청 저장 단위 (위 컬럼과 매핑)
+- `RequestLog` — 요청 저장 단위 (위 컬럼과 매핑). `BodyRaw string` 필드 = DB 에 저장되는 원본 요청 바이트. `Body interface{}` 필드는 쓰기 시 무시되고, 읽기 시 스토리지가 body_raw 를 Unmarshal 해 채움(API 응답 전용)
 - `ResponseLog { StatusCode, Headers, Body(json.RawMessage), BodyText, StreamingChunks[], IsStreaming, ResponseTime, CompletedAt }`
 - `AnthropicRequest { Model, Messages, MaxTokens, Temperature*, System[], Stream, Tools[], ToolChoice }`
 - `AnthropicMessage { Role, Content interface{} }` — Content 는 string / []block 둘다 수용, `GetContentBlocks()` 헬퍼
@@ -279,7 +279,7 @@ CREATE TABLE requests (
 | `providerPatterns` 배열 순서 (model_router.go) | 첫 매치 우선 — `o1` 이 `claude-` 앞에 있어야 함. 변경 시 라우팅 깨짐 |
 | `extractStaticPrompt` (model_router.go) | Claude Code subagent prompt 의 `Notes:` 분리 로직, 해시 매칭 근간 |
 | `SanitizeHeaders` 민감 헤더 리스트 | API 키 평문 저장 방지 — 필드 추가/제거 주의 |
-| SQLite 스키마 `createTables` | `IF NOT EXISTS` 기반 — 기존 DB 마이그레이션 없음. 컬럼 추가 시 수동 마이그레이션 필요 |
+| SQLite 스키마 `createTables` | `IF NOT EXISTS` + `ALTER TABLE ADD COLUMN` idempotent (duplicate column name 에러 무시). 신규 컬럼 추가 시 같은 패턴 유지 |
 | `OpenAIProvider.ForwardRequest` — 요청 바디 재마샬 경로 | Anthropic↔OpenAI 필드 매핑 (max_tokens→max_completion_tokens, o-series 는 temperature 제거, tool_choice 변환) 제거하면 OpenAI 응답 파싱 깨짐 |
 | `transformOpenAIStreamToAnthropic` | 빈 `choices` + `usage` 케이스 먼저 처리. 순서 바꾸면 usage 토큰 누락 |
 | `handler.handleStreamingResponse` — `message_delta.usage` 파싱 | 스트리밍 토큰 집계 핵심. 변경 시 UI 사용량 표시 깨짐 |

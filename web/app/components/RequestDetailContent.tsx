@@ -32,6 +32,7 @@ interface Request {
   headers: Record<string, string[]>;
   originalModel?: string;
   routedModel?: string;
+  bodyRaw?: string;
   body?: {
     model?: string;
     messages?: Array<{
@@ -210,6 +211,50 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
           </div>
         )}
       </div>
+
+      {/* Request Body (Raw) */}
+      {request.bodyRaw && (() => {
+        const prettyBody = beautifyRawJSON(request.bodyRaw);
+        return (
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div
+              className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
+              onClick={() => toggleSection('requestBody')}
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <span>Request Body</span>
+                </h4>
+                <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                  expandedSections.requestBody ? 'rotate-180' : ''
+                }`} />
+              </div>
+            </div>
+            {expandedSections.requestBody && (
+              <div className="p-6">
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Body</span>
+                    <button
+                      onClick={() => handleCopy(prettyBody, 'requestBody')}
+                      className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                      title="Copy request body"
+                    >
+                      {copied.requestBody ? (
+                        <Check className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  <CollapsibleJSON json={prettyBody} />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {request.body && (
         <>
@@ -965,6 +1010,17 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
       )}
     </div>
   );
+}
+
+// Beautify raw request body JSON while preserving original key order.
+// JSON.parse preserves insertion order for non-numeric string keys, so a
+// parse → stringify(pretty) round-trip keeps the wire order.
+function beautifyRawJSON(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
 }
 
 // Collapsible JSON block with truncation

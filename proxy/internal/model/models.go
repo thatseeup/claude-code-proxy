@@ -31,6 +31,7 @@ type RequestLog struct {
 	Endpoint      string              `json:"endpoint"`
 	Headers       map[string][]string `json:"headers"`
 	Body          interface{}         `json:"body"`
+	BodyRaw       string              `json:"bodyRaw,omitempty"`
 	Model         string              `json:"model,omitempty"`
 	OriginalModel string              `json:"originalModel,omitempty"`
 	RoutedModel   string              `json:"routedModel,omitempty"`

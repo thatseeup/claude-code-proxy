@@ -44,7 +44,7 @@ func (s *sqliteStorageService) createTables() error {
 		method TEXT NOT NULL,
 		endpoint TEXT NOT NULL,
 		headers TEXT NOT NULL,
-		body TEXT NOT NULL,
+		body_raw TEXT NOT NULL,
 		user_agent TEXT,
 		content_type TEXT,
 		prompt_grade TEXT,
@@ -72,13 +72,8 @@ func (s *sqliteStorageService) SaveRequest(request *model.RequestLog) (string, e
 		return "", fmt.Errorf("failed to marshal headers: %w", err)
 	}
 
-	bodyJSON, err := json.Marshal(request.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal body: %w", err)
-	}
-
 	query := `
-		INSERT INTO requests (id, timestamp, method, endpoint, headers, body, user_agent, content_type, model, original_model, routed_model, session_id)
+		INSERT INTO requests (id, timestamp, method, endpoint, headers, body_raw, user_agent, content_type, model, original_model, routed_model, session_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -88,7 +83,7 @@ func (s *sqliteStorageService) SaveRequest(request *model.RequestLog) (string, e
 		request.Method,
 		request.Endpoint,
 		string(headersJSON),
-		string(bodyJSON),
+		request.BodyRaw,
 		request.UserAgent,
 		request.ContentType,
 		request.Model,
@@ -115,7 +110,7 @@ func (s *sqliteStorageService) GetRequests(page, limit int) ([]model.RequestLog,
 	// Get paginated results
 	offset := (page - 1) * limit
 	query := `
-		SELECT id, timestamp, method, endpoint, headers, body, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
+		SELECT id, timestamp, method, endpoint, headers, body_raw, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
 		FROM requests
 		ORDER BY timestamp DESC
 		LIMIT ? OFFSET ?
@@ -130,7 +125,7 @@ func (s *sqliteStorageService) GetRequests(page, limit int) ([]model.RequestLog,
 	var requests []model.RequestLog
 	for rows.Next() {
 		var req model.RequestLog
-		var headersJSON, bodyJSON string
+		var headersJSON, bodyRaw string
 		var promptGradeJSON, responseJSON, sessionID sql.NullString
 
 		err := rows.Scan(
@@ -139,7 +134,7 @@ func (s *sqliteStorageService) GetRequests(page, limit int) ([]model.RequestLog,
 			&req.Method,
 			&req.Endpoint,
 			&headersJSON,
-			&bodyJSON,
+			&bodyRaw,
 			&req.Model,
 			&req.UserAgent,
 			&req.ContentType,
@@ -157,6 +152,7 @@ func (s *sqliteStorageService) GetRequests(page, limit int) ([]model.RequestLog,
 		if sessionID.Valid {
 			req.SessionID = sessionID.String
 		}
+		req.BodyRaw = bodyRaw
 
 		// Unmarshal JSON fields
 		if err := json.Unmarshal([]byte(headersJSON), &req.Headers); err != nil {
@@ -165,7 +161,7 @@ func (s *sqliteStorageService) GetRequests(page, limit int) ([]model.RequestLog,
 		}
 
 		var body interface{}
-		if err := json.Unmarshal([]byte(bodyJSON), &body); err != nil {
+		if err := json.Unmarshal([]byte(bodyRaw), &body); err != nil {
 			// Error unmarshaling body
 			continue
 		}
@@ -242,7 +238,7 @@ func (s *sqliteStorageService) EnsureDirectoryExists() error {
 
 func (s *sqliteStorageService) GetRequestByShortID(shortID string) (*model.RequestLog, string, error) {
 	query := `
-		SELECT id, timestamp, method, endpoint, headers, body, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
+		SELECT id, timestamp, method, endpoint, headers, body_raw, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
 		FROM requests
 		WHERE id LIKE ?
 		ORDER BY timestamp DESC
@@ -250,7 +246,7 @@ func (s *sqliteStorageService) GetRequestByShortID(shortID string) (*model.Reque
 	`
 
 	var req model.RequestLog
-	var headersJSON, bodyJSON string
+	var headersJSON, bodyRaw string
 	var promptGradeJSON, responseJSON, sessionID sql.NullString
 
 	err := s.db.QueryRow(query, "%"+shortID).Scan(
@@ -259,7 +255,7 @@ func (s *sqliteStorageService) GetRequestByShortID(shortID string) (*model.Reque
 		&req.Method,
 		&req.Endpoint,
 		&headersJSON,
-		&bodyJSON,
+		&bodyRaw,
 		&req.Model,
 		&req.UserAgent,
 		&req.ContentType,
@@ -280,6 +276,7 @@ func (s *sqliteStorageService) GetRequestByShortID(shortID string) (*model.Reque
 	if sessionID.Valid {
 		req.SessionID = sessionID.String
 	}
+	req.BodyRaw = bodyRaw
 
 	// Unmarshal JSON fields
 	if err := json.Unmarshal([]byte(headersJSON), &req.Headers); err != nil {
@@ -287,7 +284,7 @@ func (s *sqliteStorageService) GetRequestByShortID(shortID string) (*model.Reque
 	}
 
 	var body interface{}
-	if err := json.Unmarshal([]byte(bodyJSON), &body); err != nil {
+	if err := json.Unmarshal([]byte(bodyRaw), &body); err != nil {
 		return nil, "", fmt.Errorf("failed to unmarshal body: %w", err)
 	}
 	req.Body = body
@@ -315,7 +312,7 @@ func (s *sqliteStorageService) GetConfig() *config.StorageConfig {
 
 func (s *sqliteStorageService) GetAllRequests(modelFilter string) ([]*model.RequestLog, error) {
 	query := `
-		SELECT id, timestamp, method, endpoint, headers, body, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
+		SELECT id, timestamp, method, endpoint, headers, body_raw, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
 		FROM requests
 	`
 	args := []interface{}{}
@@ -337,7 +334,7 @@ func (s *sqliteStorageService) GetAllRequests(modelFilter string) ([]*model.Requ
 	var requests []*model.RequestLog
 	for rows.Next() {
 		var req model.RequestLog
-		var headersJSON, bodyJSON string
+		var headersJSON, bodyRaw string
 		var promptGradeJSON, responseJSON, sessionID sql.NullString
 
 		err := rows.Scan(
@@ -346,7 +343,7 @@ func (s *sqliteStorageService) GetAllRequests(modelFilter string) ([]*model.Requ
 			&req.Method,
 			&req.Endpoint,
 			&headersJSON,
-			&bodyJSON,
+			&bodyRaw,
 			&req.Model,
 			&req.UserAgent,
 			&req.ContentType,
@@ -364,6 +361,7 @@ func (s *sqliteStorageService) GetAllRequests(modelFilter string) ([]*model.Requ
 		if sessionID.Valid {
 			req.SessionID = sessionID.String
 		}
+		req.BodyRaw = bodyRaw
 
 		// Unmarshal JSON fields
 		if err := json.Unmarshal([]byte(headersJSON), &req.Headers); err != nil {
@@ -372,7 +370,7 @@ func (s *sqliteStorageService) GetAllRequests(modelFilter string) ([]*model.Requ
 		}
 
 		var body interface{}
-		if err := json.Unmarshal([]byte(bodyJSON), &body); err != nil {
+		if err := json.Unmarshal([]byte(bodyRaw), &body); err != nil {
 			// Error unmarshaling body
 			continue
 		}
@@ -404,7 +402,7 @@ func (s *sqliteStorageService) GetAllRequests(modelFilter string) ([]*model.Requ
 // session_id IS NULL OR session_id = '' (the "Unknown" bucket).
 func (s *sqliteStorageService) GetRequestsBySessionID(sessionIDFilter string, modelFilter string) ([]*model.RequestLog, error) {
 	query := `
-		SELECT id, timestamp, method, endpoint, headers, body, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
+		SELECT id, timestamp, method, endpoint, headers, body_raw, model, user_agent, content_type, prompt_grade, response, original_model, routed_model, session_id
 		FROM requests
 	`
 	conds := []string{}
@@ -436,7 +434,7 @@ func (s *sqliteStorageService) GetRequestsBySessionID(sessionIDFilter string, mo
 	var requests []*model.RequestLog
 	for rows.Next() {
 		var req model.RequestLog
-		var headersJSON, bodyJSON string
+		var headersJSON, bodyRaw string
 		var promptGradeJSON, responseJSON, sessionID sql.NullString
 
 		err := rows.Scan(
@@ -445,7 +443,7 @@ func (s *sqliteStorageService) GetRequestsBySessionID(sessionIDFilter string, mo
 			&req.Method,
 			&req.Endpoint,
 			&headersJSON,
-			&bodyJSON,
+			&bodyRaw,
 			&req.Model,
 			&req.UserAgent,
 			&req.ContentType,
@@ -462,13 +460,14 @@ func (s *sqliteStorageService) GetRequestsBySessionID(sessionIDFilter string, mo
 		if sessionID.Valid {
 			req.SessionID = sessionID.String
 		}
+		req.BodyRaw = bodyRaw
 
 		if err := json.Unmarshal([]byte(headersJSON), &req.Headers); err != nil {
 			continue
 		}
 
 		var body interface{}
-		if err := json.Unmarshal([]byte(bodyJSON), &body); err != nil {
+		if err := json.Unmarshal([]byte(bodyRaw), &body); err != nil {
 			continue
 		}
 		req.Body = body
