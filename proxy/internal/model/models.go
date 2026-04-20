@@ -84,8 +84,11 @@ type AnthropicResponse struct {
 }
 
 type AnthropicContentBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type  string          `json:"type"`
+	Text  string          `json:"text,omitempty"`
+	ID    string          `json:"id,omitempty"`
+	Name  string          `json:"name,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
 }
 
 type AnthropicMessage struct {
@@ -185,10 +188,12 @@ type StreamingEvent struct {
 }
 
 type Delta struct {
-	Type  string          `json:"type,omitempty"`
-	Text  string          `json:"text,omitempty"`
-	Name  string          `json:"name,omitempty"`
-	Input json.RawMessage `json:"input,omitempty"`
+	Type        string          `json:"type,omitempty"`
+	Text        string          `json:"text,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Input       json.RawMessage `json:"input,omitempty"`
+	PartialJSON string          `json:"partial_json,omitempty"`
+	StopReason  string          `json:"stop_reason,omitempty"`
 }
 
 type ContentBlock struct {

@@ -351,13 +351,21 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 		return
 	}
 
-	var fullResponseText strings.Builder
-	var toolCalls []model.ContentBlock
+	// Blocks are keyed by their streaming `index` so text and tool_use blocks
+	// can interleave correctly. partialJSON accumulates `input_json_delta`
+	// chunks per index; we parse them once the stream completes.
+	blocks := map[int]*model.AnthropicContentBlock{}
+	partialJSON := map[int]*strings.Builder{}
+	var blockOrder []int
+
 	var streamingChunks []string
 	var finalUsage *model.AnthropicUsage
 	var messageID string
 	var modelName string
 	var stopReason string
+	// Raw `message` object from the first `message_start` event — used to
+	// preserve upstream key order when we rebuild the stored response body.
+	var messageStartRaw json.RawMessage
 
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
@@ -393,6 +401,16 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 				}
 				if reason, ok := message["stop_reason"].(string); ok {
 					stopReason = reason
+				}
+			}
+			// Preserve upstream key order by keeping the raw bytes of the
+			// `message` object from message_start.
+			if messageStartRaw == nil {
+				var envelope struct {
+					Message json.RawMessage `json:"message"`
+				}
+				if err := json.Unmarshal([]byte(jsonData), &envelope); err == nil {
+					messageStartRaw = envelope.Message
 				}
 			}
 		}
@@ -431,19 +449,50 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 		}
 
 		switch event.Type {
+		case "content_block_start":
+			if event.ContentBlock != nil && event.Index != nil {
+				idx := *event.Index
+				if _, exists := blocks[idx]; !exists {
+					blockOrder = append(blockOrder, idx)
+				}
+				block := &model.AnthropicContentBlock{
+					Type: event.ContentBlock.Type,
+					Text: event.ContentBlock.Text,
+					ID:   event.ContentBlock.ID,
+					Name: event.ContentBlock.Name,
+				}
+				if len(event.ContentBlock.Input) > 0 {
+					block.Input = event.ContentBlock.Input
+				}
+				blocks[idx] = block
+			}
 		case "content_block_delta":
-			if event.Delta != nil {
-				if event.Delta.Type == "text_delta" {
-					fullResponseText.WriteString(event.Delta.Text)
-				} else if event.Delta.Type == "input_json_delta" {
-					if event.Index != nil && *event.Index < len(toolCalls) {
-						toolCalls[*event.Index].Input = append(toolCalls[*event.Index].Input, event.Delta.Input...)
+			if event.Delta != nil && event.Index != nil {
+				idx := *event.Index
+				block, ok := blocks[idx]
+				if !ok {
+					block = &model.AnthropicContentBlock{}
+					blocks[idx] = block
+					blockOrder = append(blockOrder, idx)
+				}
+				switch event.Delta.Type {
+				case "text_delta":
+					if block.Type == "" {
+						block.Type = "text"
 					}
+					block.Text += event.Delta.Text
+				case "input_json_delta":
+					sb, ok := partialJSON[idx]
+					if !ok {
+						sb = &strings.Builder{}
+						partialJSON[idx] = sb
+					}
+					sb.WriteString(event.Delta.PartialJSON)
 				}
 			}
-		case "content_block_start":
-			if event.ContentBlock != nil && event.ContentBlock.Type == "tool_use" {
-				toolCalls = append(toolCalls, *event.ContentBlock)
+		case "message_delta":
+			if event.Delta != nil && event.Delta.StopReason != "" {
+				stopReason = event.Delta.StopReason
 			}
 		case "message_stop":
 			// End of stream - scanner will exit on its own
@@ -459,32 +508,53 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 		CompletedAt:     time.Now().Format(time.RFC3339),
 	}
 
-	// Create a structured response body that matches Anthropic's format
-	var contentBlocks []model.AnthropicContentBlock
-	if fullResponseText.Len() > 0 {
-		contentBlocks = append(contentBlocks, model.AnthropicContentBlock{
-			Type: "text",
-			Text: fullResponseText.String(),
-		})
+	// Finalize tool_use input by parsing accumulated partial_json. If the
+	// stream ended mid-input (unlikely but possible) we fall back to the raw
+	// string so the UI can still render something.
+	for idx, sb := range partialJSON {
+		block, ok := blocks[idx]
+		if !ok {
+			continue
+		}
+		raw := sb.String()
+		if raw == "" {
+			block.Input = json.RawMessage("{}")
+			continue
+		}
+		if json.Valid([]byte(raw)) {
+			block.Input = json.RawMessage(raw)
+		} else {
+			encoded, _ := json.Marshal(raw)
+			block.Input = encoded
+		}
 	}
 
-	// Create an AnthropicResponse-like structure for consistency
-	responseBody := map[string]interface{}{
+	contentBlocks := make([]model.AnthropicContentBlock, 0, len(blockOrder))
+	for _, idx := range blockOrder {
+		if block, ok := blocks[idx]; ok && block.Type != "" {
+			if block.Type == "tool_use" && len(block.Input) == 0 {
+				block.Input = json.RawMessage("{}")
+			}
+			contentBlocks = append(contentBlocks, *block)
+		}
+	}
+
+	// Build overrides: values we assembled from the stream that should replace
+	// the corresponding keys in the original message_start object.
+	overrides := map[string]interface{}{
 		"content":     contentBlocks,
-		"id":          messageID,
-		"model":       modelName,
-		"role":        "assistant",
 		"stop_reason": stopReason,
-		"type":        "message",
 	}
-
-	// Add usage data if we captured it
 	if finalUsage != nil {
-		responseBody["usage"] = finalUsage
+		overrides["usage"] = finalUsage
 	}
 
-	// Marshal to JSON for storage
-	responseBodyBytes, err := json.Marshal(responseBody)
+	responseBodyBytes, err := mergePreservingOrder(messageStartRaw, overrides, map[string]interface{}{
+		"id":    messageID,
+		"model": modelName,
+		"role":  "assistant",
+		"type":  "message",
+	})
 	if err != nil {
 		log.Printf("❌ Error marshaling streaming response body: %v", err)
 		responseBodyBytes = []byte("{}")
@@ -560,6 +630,99 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// mergePreservingOrder rebuilds a JSON object that keeps the key order of
+// `original`, replacing values for any key present in `overrides`. Keys present
+// in `original` but not in `overrides` keep their upstream bytes verbatim.
+// Keys in `overrides` or `fallback` that don't appear in `original` are
+// appended at the end (overrides first, then fallback) — this covers cases
+// where `message_start` didn't include a field (e.g. `usage` arriving only in
+// `message_delta`, or the entire `message_start` event being absent).
+//
+// Only the top-level key order is preserved; nested objects (content blocks,
+// usage, etc.) are re-marshaled through standard encoding and their nested
+// key order follows struct field order.
+func mergePreservingOrder(original json.RawMessage, overrides, fallback map[string]interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+
+	written := map[string]bool{}
+	first := true
+	writeKV := func(key string, valueBytes []byte) {
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		keyBytes, _ := json.Marshal(key)
+		buf.Write(keyBytes)
+		buf.WriteByte(':')
+		buf.Write(valueBytes)
+		written[key] = true
+	}
+
+	if len(original) > 0 {
+		dec := json.NewDecoder(bytes.NewReader(original))
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, fmt.Errorf("read opening token: %w", err)
+		}
+		if d, ok := tok.(json.Delim); !ok || d != '{' {
+			return nil, fmt.Errorf("expected object, got %v", tok)
+		}
+		for dec.More() {
+			tok, err := dec.Token()
+			if err != nil {
+				return nil, fmt.Errorf("read key: %w", err)
+			}
+			key, ok := tok.(string)
+			if !ok {
+				return nil, fmt.Errorf("expected string key, got %v", tok)
+			}
+			if override, exists := overrides[key]; exists {
+				valueBytes, err := json.Marshal(override)
+				if err != nil {
+					return nil, fmt.Errorf("marshal override %q: %w", key, err)
+				}
+				writeKV(key, valueBytes)
+				// Consume the original value so the decoder stays in sync.
+				var discard json.RawMessage
+				if err := dec.Decode(&discard); err != nil {
+					return nil, fmt.Errorf("discard original %q: %w", key, err)
+				}
+			} else {
+				var raw json.RawMessage
+				if err := dec.Decode(&raw); err != nil {
+					return nil, fmt.Errorf("read original %q: %w", key, err)
+				}
+				writeKV(key, raw)
+			}
+		}
+	}
+
+	// Append keys that weren't in the original — overrides first (they're the
+	// assembled stream state), then fallback scalars.
+	for _, key := range []string{"content", "stop_reason", "usage"} {
+		if v, ok := overrides[key]; ok && !written[key] {
+			valueBytes, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("marshal trailing override %q: %w", key, err)
+			}
+			writeKV(key, valueBytes)
+		}
+	}
+	for _, key := range []string{"id", "type", "role", "model"} {
+		if v, ok := fallback[key]; ok && !written[key] {
+			valueBytes, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("marshal fallback %q: %w", key, err)
+			}
+			writeKV(key, valueBytes)
+		}
+	}
+
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 func generateRequestID() string {
