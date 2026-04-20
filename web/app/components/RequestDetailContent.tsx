@@ -510,6 +510,56 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
     return { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', icon: 'text-gray-600' };
   };
 
+  // Format raw SSE chunks into multiline, JSON-beautified display elements.
+  // Each chunk is typically a single SSE line like "data: {...}" or "event: ...",
+  // but a chunk may also contain multiple embedded newlines — split defensively.
+  const formatSSELines = (chunks: string[]) => {
+    const lines = chunks.flatMap(chunk => chunk.split('\n'));
+    const elements: React.ReactNode[] = [];
+    let key = 0;
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      // SSE field lines: "data: ...", "event: ...", "id: ...", "retry: ..."
+      const fieldMatch = /^(data|event|id|retry):\s?(.*)$/s.exec(line);
+      if (fieldMatch) {
+        const [, fieldName, fieldValue] = fieldMatch;
+        let valueNode: React.ReactNode;
+
+        const trimmed = fieldValue.trim();
+        if (fieldName === 'data' && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            const pretty = JSON.stringify(parsed, null, 2);
+            valueNode = (
+              <pre className="whitespace-pre-wrap text-gray-700 mt-0.5 ml-4">
+                {pretty}
+              </pre>
+            );
+          } catch {
+            valueNode = <span className="text-gray-700 ml-1 whitespace-pre-wrap">{fieldValue}</span>;
+          }
+        } else {
+          valueNode = <span className="text-gray-700 ml-1 whitespace-pre-wrap">{fieldValue}</span>;
+        }
+
+        elements.push(
+          <div key={key++} className="mb-1">
+            <span className="text-purple-700 font-semibold">{fieldName}:</span>
+            {valueNode}
+          </div>
+        );
+      } else {
+        elements.push(
+          <div key={key++} className="text-gray-500 whitespace-pre-wrap">{line}</div>
+        );
+      }
+    }
+
+    return elements;
+  };
+
   // Parse streaming chunks to extract the final assembled text
   const parseStreamingResponse = (chunks: string[]) => {
     let assembledText = '';
@@ -893,9 +943,9 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
                               )}
                             </button>
                           </div>
-                          <pre className="text-xs text-gray-600 overflow-x-auto max-h-64 overflow-y-auto bg-gray-100 rounded p-2 font-mono">
-                            {parsed.rawData}
-                          </pre>
+                          <div className="text-xs text-gray-600 overflow-x-auto max-h-96 overflow-y-auto bg-gray-100 rounded p-2 font-mono">
+                            {formatSSELines(response.streamingChunks)}
+                          </div>
                         </div>
                       )}
                     </div>
