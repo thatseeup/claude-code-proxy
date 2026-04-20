@@ -11,9 +11,18 @@ import (
 	"github.com/seifghazi/claude-code-monitor/internal/model"
 )
 
-// SanitizeHeaders removes sensitive headers before logging/storage
-func SanitizeHeaders(headers http.Header) http.Header {
-	sanitized := make(http.Header)
+// SanitizeHeaders hashes sensitive headers (Authorization, x-api-key, etc.) with
+// SHA256 before logging/storage. When sanitize is false, headers are copied as-is
+// so request logs retain the original values — only use this in trusted local setups.
+func SanitizeHeaders(headers http.Header, sanitize bool) http.Header {
+	out := make(http.Header)
+
+	if !sanitize {
+		for key, values := range headers {
+			out[key] = values
+		}
+		return out
+	}
 
 	sensitiveHeaders := []string{
 		"x-api-key",
@@ -36,19 +45,18 @@ func SanitizeHeaders(headers http.Header) http.Header {
 		}
 
 		if isSensitive {
-			// Calculate SHA256 hash for each sensitive header value
 			hashedValues := make([]string, len(values))
 			for i, value := range values {
 				hash := sha256.Sum256([]byte(value))
 				hashedValues[i] = fmt.Sprintf("sha256:%x", hash)
 			}
-			sanitized[key] = hashedValues
+			out[key] = hashedValues
 		} else {
-			sanitized[key] = values
+			out[key] = values
 		}
 	}
 
-	return sanitized
+	return out
 }
 
 // ConversationDiffAnalyzer analyzes conversation flows to identify new vs repeated content

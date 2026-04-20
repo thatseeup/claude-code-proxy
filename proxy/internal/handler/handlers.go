@@ -28,9 +28,10 @@ type Handler struct {
 	conversationService service.ConversationService
 	modelRouter         *service.ModelRouter
 	logger              *log.Logger
+	sanitizeHeaders     bool
 }
 
-func New(anthropicService service.AnthropicService, storageService service.StorageService, logger *log.Logger, modelRouter *service.ModelRouter) *Handler {
+func New(anthropicService service.AnthropicService, storageService service.StorageService, logger *log.Logger, modelRouter *service.ModelRouter, sanitizeHeaders bool) *Handler {
 	conversationService := service.NewConversationService()
 
 	return &Handler{
@@ -39,6 +40,7 @@ func New(anthropicService service.AnthropicService, storageService service.Stora
 		conversationService: conversationService,
 		modelRouter:         modelRouter,
 		logger:              logger,
+		sanitizeHeaders:     sanitizeHeaders,
 	}
 }
 
@@ -81,7 +83,7 @@ func (h *Handler) Messages(w http.ResponseWriter, r *http.Request) {
 		Timestamp:     time.Now().Format(time.RFC3339),
 		Method:        r.Method,
 		Endpoint:      r.URL.Path,
-		Headers:       SanitizeHeaders(r.Header),
+		Headers:       SanitizeHeaders(r.Header, h.sanitizeHeaders),
 		Body:          req,
 		Model:         decision.OriginalModel,
 		OriginalModel: decision.OriginalModel,
@@ -332,7 +334,7 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 
 		responseLog := &model.ResponseLog{
 			StatusCode:   resp.StatusCode,
-			Headers:      SanitizeHeaders(resp.Header),
+			Headers:      SanitizeHeaders(resp.Header, h.sanitizeHeaders),
 			BodyText:     string(errorBytes),
 			ResponseTime: time.Since(startTime).Milliseconds(),
 			IsStreaming:  true,
@@ -450,7 +452,7 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 
 	responseLog := &model.ResponseLog{
 		StatusCode:      resp.StatusCode,
-		Headers:         SanitizeHeaders(resp.Header),
+		Headers:         SanitizeHeaders(resp.Header, h.sanitizeHeaders),
 		StreamingChunks: streamingChunks,
 		ResponseTime:    time.Since(startTime).Milliseconds(),
 		IsStreaming:     true,
@@ -512,7 +514,7 @@ func (h *Handler) handleNonStreamingResponse(w http.ResponseWriter, resp *http.R
 
 	responseLog := &model.ResponseLog{
 		StatusCode:   resp.StatusCode,
-		Headers:      SanitizeHeaders(resp.Header),
+		Headers:      SanitizeHeaders(resp.Header, h.sanitizeHeaders),
 		ResponseTime: time.Since(startTime).Milliseconds(),
 		IsStreaming:  false,
 		CompletedAt:  time.Now().Format(time.RFC3339),

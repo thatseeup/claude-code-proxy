@@ -221,6 +221,7 @@ CREATE TABLE requests (
 - `providers.openai.{base_url, api_key}`
 - `storage.{db_path, requests_dir}`
 - `subagents.enable` (bool), `subagents.mappings` (map[agentName]targetModel)
+- `security.sanitize_headers` (bool, default true) — false 면 `SanitizeHeaders` 가 원본 값 그대로 복사 (API 키 평문 저장됨, 로컬 디버깅 전용). `cfg.ShouldSanitizeHeaders()` 로 조회, `handler.New(... , sanitizeHeaders bool)` 로 주입
 
 ---
 
@@ -250,7 +251,7 @@ CREATE TABLE requests (
 - 패키지 경로 prefix: `github.com/seifghazi/claude-code-monitor/internal/<pkg>`
 - 로깅: `logger := log.New(os.Stdout, "proxy: ", log.LstdFlags|log.Lshortfile)` + 이모지 prefix (🚀 ✅ ❌ 🗿 📡 🎨 🤖)
 - 에러 처리: `fmt.Errorf("...: %w", err)` wrap, 상위에서 `log.Printf("❌ ...")` + `writeErrorResponse`
-- 민감 헤더: `handler.SanitizeHeaders` 로 저장/로깅 전 SHA256 해시 (`x-api-key`, `authorization`, `anthropic-api-key`, `openai-api-key`, `bearer`, `api-key` 부분일치)
+- 민감 헤더: `handler.SanitizeHeaders(headers, sanitize bool)` 로 저장/로깅 전 SHA256 해시 (`x-api-key`, `authorization`, `anthropic-api-key`, `openai-api-key`, `bearer`, `api-key` 부분일치). `sanitize=false` 이면 원본 복사. `Handler.sanitizeHeaders` 에 설정값 주입됨 (`config.security.sanitize_headers`, 기본 true)
 - HTTP 바디: `middleware.Logging` 이 `context.BodyBytesKey` 에 저장 → `handler.getBodyBytes(r)` 로 읽음 (이중 읽기 방지)
 - Provider 인터페이스 구현으로 프로바이더 추가 (`provider.Provider`)
 - 모델 라우팅: `providerPatterns` 순서 중요 (`gpt-`, `o1`, `o3` → openai, `claude-` → anthropic, 기본 anthropic)

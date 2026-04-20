@@ -38,6 +38,15 @@ providers:
     # Can also be set via OPENAI_BASE_URL environment variable
     # base_url: "https://api.openai.com"
 
+# Security configuration
+security:
+  # Hash sensitive headers (Authorization, x-api-key, anthropic-api-key, openai-api-key,
+  # api-key, bearer) with SHA256 before saving to the request log.
+  # - true  (default): headers are replaced with `sha256:<hex>` in stored logs / UI
+  # - false           : original header values are kept in the log (local debugging only;
+  #                     do NOT enable on shared or production deployments)
+  sanitize_headers: true
+
 # Storage configuration
 storage:
   # SQLite database path for storing request history

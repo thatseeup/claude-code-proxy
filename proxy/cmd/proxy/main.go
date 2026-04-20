@@ -45,7 +45,11 @@ func main() {
 	}
 	logger.Println("🗿 SQLite database ready")
 
-	h := handler.New(anthropicService, storageService, logger, modelRouter)
+	sanitizeHeaders := cfg.ShouldSanitizeHeaders()
+	if !sanitizeHeaders {
+		logger.Println("⚠️  security.sanitize_headers=false — request logs will store original Authorization/API-key headers in plaintext")
+	}
+	h := handler.New(anthropicService, storageService, logger, modelRouter, sanitizeHeaders)
 
 	r := mux.NewRouter()
 

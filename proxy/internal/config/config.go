@@ -15,7 +15,16 @@ type Config struct {
 	Providers ProvidersConfig `yaml:"providers"`
 	Storage   StorageConfig   `yaml:"storage"`
 	Subagents SubagentsConfig `yaml:"subagents"`
+	Security  SecurityConfig  `yaml:"security"`
 	Anthropic AnthropicConfig
+}
+
+type SecurityConfig struct {
+	// SanitizeHeaders controls whether sensitive headers (Authorization, x-api-key, etc.)
+	// are hashed with SHA256 before being stored/logged. Default: true.
+	// Set to false to keep original header values in the request log — useful for local
+	// debugging but NOT recommended for shared or production deployments.
+	SanitizeHeaders *bool `yaml:"sanitize_headers"`
 }
 
 type ServerConfig struct {
@@ -102,6 +111,9 @@ func Load() (*Config, error) {
 		Subagents: SubagentsConfig{
 			Enable:   false,
 			Mappings: make(map[string]string),
+		},
+		Security: SecurityConfig{
+			SanitizeHeaders: nil,
 		},
 	}
 
@@ -192,6 +204,15 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// ShouldSanitizeHeaders returns true when sensitive headers should be hashed
+// before being saved to the request log. Defaults to true when unset.
+func (c *Config) ShouldSanitizeHeaders() bool {
+	if c.Security.SanitizeHeaders == nil {
+		return true
+	}
+	return *c.Security.SanitizeHeaders
 }
 
 func (c *Config) loadFromFile(path string) error {
