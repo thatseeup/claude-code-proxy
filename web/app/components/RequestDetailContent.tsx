@@ -107,16 +107,6 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
     }
   };
 
-  const getMethodColor = (method: string) => {
-    const colors = {
-      'GET': 'bg-green-50 text-green-700 border border-green-200',
-      'POST': 'bg-blue-50 text-blue-700 border border-blue-200',
-      'PUT': 'bg-yellow-50 text-yellow-700 border border-yellow-200',
-      'DELETE': 'bg-red-50 text-red-700 border border-red-200'
-    };
-    return colors[method as keyof typeof colors] || 'bg-gray-50 text-gray-700 border border-gray-200';
-  };
-
   const canGradeRequest = (request: Request) => {
     return request.body && 
            request.body.messages && 
@@ -126,49 +116,44 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
 
   return (
     <div className="space-y-6">
-      {/* Request Overview */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-            <Info className="w-5 h-5 text-blue-600" />
-            <span>Request Overview</span>
-          </h4>
-          {/* {!request.promptGrade && canGradeRequest(request) && (
-            <button 
-              onClick={onGrade}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-            >
-              <Target className="w-4 h-4" />
-              <span>Grade This Prompt</span>
-            </button>
-          )} */}
-        </div>
-        <div className="grid grid-cols-2 gap-6 text-sm">
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <span className="text-gray-500 font-medium min-w-[80px]">Method:</span>
-              <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide ${getMethodColor(request.method)}`}>
-                {request.method}
-              </span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <span className="text-gray-500 font-medium min-w-[80px]">Endpoint:</span>
-              <code className="text-blue-600 bg-blue-50 px-2 py-1 rounded font-mono text-xs border border-blue-200">
-                {getChatCompletionsEndpoint(request.routedModel, request.endpoint)}
-              </code>
-            </div>
+      {/* Request / Response Overview — side-by-side 50:50 on lg+, stacked below */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Request Overview */}
+        <div
+          className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm ${
+            request.response ? '' : 'lg:col-span-2'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+              <Info className="w-5 h-5 text-blue-600" />
+              <span>Request Overview</span>
+            </h4>
+            {/* {!request.promptGrade && canGradeRequest(request) && (
+              <button
+                onClick={onGrade}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+              >
+                <Target className="w-4 h-4" />
+                <span>Grade This Prompt</span>
+              </button>
+            )} */}
           </div>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3">
-              <span className="text-gray-500 font-medium min-w-[80px]">Timestamp:</span>
-              <span className="text-gray-900">{new Date(request.timestamp).toLocaleString()}</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <span className="text-gray-500 font-medium min-w-[80px]">User Agent:</span>
-              <span className="text-gray-600 text-xs">{request.headers['User-Agent']?.[0] || 'N/A'}</span>
-            </div>
-          </div>
+          <RequestOverviewTable request={request} />
         </div>
+
+        {/* Response Overview */}
+        {request.response && (
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                <ArrowLeftRight className="w-5 h-5 text-blue-600" />
+                <span>Response Overview</span>
+              </h4>
+            </div>
+            <ResponseOverviewTable response={request.response} />
+          </div>
+        )}
       </div>
 
       {/* Headers */}
@@ -1144,5 +1129,214 @@ function ToolCard({ tool, index }: { tool: any; index: number }) {
         )}
       </div>
     </div>
+  );
+}
+
+// Request Overview table: label/value rows per requirements
+function RequestOverviewTable({ request }: { readonly request: Request }) {
+  const userAgent = request.headers['User-Agent']?.[0];
+  const model = request.body?.model;
+  const system0 = request.body?.system?.[0]?.text;
+  const system1 = request.body?.system?.[1]?.text;
+  const maxTokens = request.body?.max_tokens;
+  const stream = request.body?.stream;
+
+  const rows: Array<{ label: string; value: React.ReactNode }> = [
+    {
+      label: 'Timestamp',
+      value: <span className="text-gray-900">{new Date(request.timestamp).toLocaleString()}</span>,
+    },
+    {
+      label: 'Method/URL',
+      value: (
+        <code className="text-blue-700 bg-blue-50 px-2 py-1 rounded font-mono text-xs border border-blue-200 break-all">
+          {request.method} {getChatCompletionsEndpoint(request.routedModel, request.endpoint)}
+        </code>
+      ),
+    },
+    {
+      label: 'Header.User-Agent',
+      value: userAgent ? (
+        <span className="text-gray-700 text-xs break-all">{userAgent}</span>
+      ) : (
+        <span className="text-gray-400 italic">없음</span>
+      ),
+    },
+    {
+      label: 'Header.Model',
+      value: model ? (
+        <span className="text-gray-900 font-mono text-xs break-all">{model}</span>
+      ) : (
+        <span className="text-gray-400 italic">없음</span>
+      ),
+    },
+    {
+      label: 'Body.system[0]',
+      value: system0 ? (
+        <span className="text-gray-800 whitespace-pre-wrap break-words text-xs">{system0}</span>
+      ) : (
+        <span className="text-gray-400 italic">없음</span>
+      ),
+    },
+    {
+      label: 'Body.system[1]',
+      value: system1 ? (
+        <span
+          className="text-gray-800 text-xs block truncate"
+          title={system1}
+        >
+          {system1}
+        </span>
+      ) : (
+        <span className="text-gray-400 italic">없음</span>
+      ),
+    },
+    {
+      label: 'Body.max_tokens',
+      value:
+        maxTokens !== undefined && maxTokens !== null ? (
+          <span className="text-gray-900">{maxTokens.toLocaleString()}</span>
+        ) : (
+          <span className="text-gray-400 italic">없음</span>
+        ),
+    },
+    {
+      label: 'Body.stream',
+      value:
+        stream === undefined || stream === null ? (
+          <span className="text-gray-400 italic">없음</span>
+        ) : (
+          <span className="text-gray-900">{String(stream)}</span>
+        ),
+    },
+  ];
+
+  return (
+    <table className="w-full table-fixed text-sm border border-gray-200 rounded-lg overflow-hidden">
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.label} className="border-b border-gray-200 last:border-b-0 align-top">
+            <td className="bg-gray-50 text-gray-600 font-medium px-3 py-2 w-[180px] whitespace-nowrap">
+              {row.label}
+            </td>
+            <td className="px-3 py-2 overflow-hidden">{row.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// Case-insensitive single header lookup. Returns the first value or undefined.
+function getHeader(headers: Record<string, string[]>, name: string): string | undefined {
+  if (!headers) return undefined;
+  const direct = headers[name];
+  if (direct && direct.length > 0) return direct[0];
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === lower) {
+      const v = headers[key];
+      if (v && v.length > 0) return v[0];
+    }
+  }
+  return undefined;
+}
+
+// Response Overview table: label/value rows per requirements.
+// Only renders Ratelimit rows when at least one ratelimit header is present.
+function ResponseOverviewTable({ response }: { readonly response: NonNullable<Request['response']> }) {
+  const headers = response.headers || {};
+
+  const contentType = getHeader(headers, 'Content-Type');
+  const requestId = getHeader(headers, 'Request-Id') ?? getHeader(headers, 'request-id');
+
+  // Ratelimit headers (Anthropic unified 5h / 7d)
+  const rl5hUtil = getHeader(headers, 'Anthropic-Ratelimit-Unified-5h-Utilization');
+  const rl5hReset = getHeader(headers, 'Anthropic-Ratelimit-Unified-5h-Reset');
+  const rl5hStatus = getHeader(headers, 'Anthropic-Ratelimit-Unified-5h-Status');
+  const rl7dUtil = getHeader(headers, 'Anthropic-Ratelimit-Unified-7d-Utilization');
+  const rl7dReset = getHeader(headers, 'Anthropic-Ratelimit-Unified-7d-Reset');
+  const rl7dStatus = getHeader(headers, 'Anthropic-Ratelimit-Unified-7d-Status');
+  const hasAnyRatelimit =
+    rl5hUtil !== undefined ||
+    rl5hReset !== undefined ||
+    rl5hStatus !== undefined ||
+    rl7dUtil !== undefined ||
+    rl7dReset !== undefined ||
+    rl7dStatus !== undefined;
+
+  const formatResetTs = (raw: string | undefined): string => {
+    if (raw === undefined || raw === null || raw === '') return '없음';
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return raw;
+    return new Date(n * 1000).toLocaleString();
+  };
+
+  const formatRatelimitRow = (
+    util: string | undefined,
+    reset: string | undefined,
+    status: string | undefined,
+  ): React.ReactNode => {
+    const parts = [
+      util ?? '없음',
+      formatResetTs(reset),
+      status ?? '없음',
+    ];
+    return <span className="text-gray-900 break-all">{parts.join(' / ')}</span>;
+  };
+
+  const body = response.body;
+  const usage = body?.usage;
+
+  const none = <span className="text-gray-400 italic">없음</span>;
+
+  const plainText = (v: string | number | undefined | null): React.ReactNode =>
+    v === undefined || v === null || v === ''
+      ? none
+      : <span className="text-gray-900 break-all">{String(v)}</span>;
+
+  const mono = (v: string | number | undefined | null): React.ReactNode =>
+    v === undefined || v === null || v === ''
+      ? none
+      : <span className="text-gray-900 font-mono text-xs break-all">{String(v)}</span>;
+
+  const num = (v: number | undefined | null): React.ReactNode =>
+    v === undefined || v === null ? none : <span className="text-gray-900">{Number(v).toLocaleString()}</span>;
+
+  const rows: Array<{ label: string; value: React.ReactNode }> = [
+    { label: 'Status', value: <span className="text-gray-900">{response.statusCode}</span> },
+    { label: 'Header.Content-Type', value: plainText(contentType) },
+    { label: 'Header.Request-Id', value: mono(requestId) },
+  ];
+
+  if (hasAnyRatelimit) {
+    rows.push(
+      { label: 'Ratelimit-5h', value: formatRatelimitRow(rl5hUtil, rl5hReset, rl5hStatus) },
+      { label: 'Ratelimit-7d', value: formatRatelimitRow(rl7dUtil, rl7dReset, rl7dStatus) },
+    );
+  }
+
+  rows.push(
+    { label: 'Body.id', value: mono(body?.id) },
+    { label: 'Body.stop_reason', value: plainText(body?.stop_reason) },
+    { label: 'Body.usage.input_tokens', value: num(usage?.input_tokens) },
+    { label: 'Body.usage.cache_creation_input_tokens', value: num(usage?.cache_creation_input_tokens) },
+    { label: 'Body.usage.cache_read_input_tokens', value: num(usage?.cache_read_input_tokens) },
+    { label: 'Body.usage.output_tokens', value: num(usage?.output_tokens) },
+  );
+
+  return (
+    <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.label} className="border-b border-gray-200 last:border-b-0 align-top">
+            <td className="bg-gray-50 text-gray-600 font-medium px-3 py-2 w-[240px] whitespace-nowrap">
+              {row.label}
+            </td>
+            <td className="px-3 py-2">{row.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
