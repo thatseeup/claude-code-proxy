@@ -1,6 +1,6 @@
 import {
-  useFetcher,
   useNavigate,
+  useRevalidator,
   useSearchParams,
 } from "@remix-run/react";
 import { ChevronDown, Trash2 } from "lucide-react";
@@ -51,14 +51,11 @@ export default function SessionPicker({
   activeSessionId,
 }: Readonly<SessionPickerProps>) {
   const [open, setOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const fetcher = useFetcher();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const [searchParams] = useSearchParams();
-  const wasSubmittingRef = useRef(false);
-
-  const isDeleting =
-    fetcher.state === "submitting" || fetcher.state === "loading";
 
   // Preserve `?model=` query when navigating between sessions.
   const modelQuery = searchParams.get("model");
@@ -66,18 +63,6 @@ export default function SessionPicker({
     modelQuery && modelQuery !== "all"
       ? `?model=${encodeURIComponent(modelQuery)}`
       : "";
-
-  // After successful deletion of the active session, navigate back to
-  // /requests so the parent loader picks the next most-recent one.
-  useEffect(() => {
-    if (wasSubmittingRef.current && fetcher.state === "idle") {
-      wasSubmittingRef.current = false;
-      navigate("/requests");
-    }
-    if (fetcher.state === "submitting") {
-      wasSubmittingRef.current = true;
-    }
-  }, [fetcher.state, navigate]);
 
   // Close dropdown on outside click.
   useEffect(() => {
@@ -92,12 +77,24 @@ export default function SessionPicker({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (isDeleting) return;
-    fetcher.submit(null, {
-      method: "delete",
-      action: `/api/sessions/${encodeURIComponent(activeSessionId)}`,
-    });
+    setIsDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/sessions/${encodeURIComponent(activeSessionId)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        throw new Error(`Failed to delete session (status ${res.status})`);
+      }
+      revalidator.revalidate();
+      navigate("/requests");
+    } catch (err) {
+      console.error("Failed to delete session:", err);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSelect = (token: string) => {
