@@ -418,13 +418,19 @@ export default function RequestsForSession() {
                 </div>
                 <div className="flex items-center justify-between gap-2 mb-1 leading-none text-xs">
                   <div className="flex items-center flex-wrap gap-1.5 min-w-0">
-                    {isStreamRequest(req.body) && (
-                      <span className="px-1.5 py-0.5 rounded font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                        Stream
+                    {req.body && !isStreamRequest(req.body) && (
+                      <span className="px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                        Non-Stream
                       </span>
                     )}
                     {req.response?.body?.stop_reason && (
-                      <span className="px-1.5 py-0.5 rounded font-medium bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                      <span
+                        className={`px-1.5 py-0.5 rounded font-medium ${
+                          req.response.body.stop_reason === "end_turn"
+                            ? "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                            : "bg-slate-100 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500"
+                        }`}
+                      >
                         {req.response.body.stop_reason}
                       </span>
                     )}
