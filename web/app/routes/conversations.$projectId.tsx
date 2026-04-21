@@ -194,9 +194,12 @@ export default function ConversationsForProject() {
           conversations.map((conv) => {
             const isSelected =
               conv.sessionId === (selected?.sessionId ?? "");
-            const preview =
-              conv.title?.trim() ||
-              firstUserText(conv as unknown as Conversation);
+            const title = conv.title?.trim();
+            const fallbackPreview = firstUserText(
+              conv as unknown as Conversation
+            );
+            const headline = title || fallbackPreview || conv.sessionId.slice(0, 8);
+            const subline = conv.sessionId.slice(0, 8);
             const nextParams = new URLSearchParams(searchParams);
             nextParams.set("sid", conv.sessionId);
             return (
@@ -219,27 +222,22 @@ export default function ConversationsForProject() {
                     : "hover:bg-gray-50 dark:hover:bg-slate-800"
                 }`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="text-sm font-mono text-gray-900 dark:text-gray-100 truncate">
-                        {conv.sessionId.slice(0, 8)}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {conv.messageCount} msg
-                        {conv.messageCount === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    {preview && (
-                      <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                        {preview}
-                      </div>
-                    )}
+                <div className="min-w-0">
+                  <div
+                    className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate mb-1"
+                    title={headline}
+                  >
+                    {headline}
                   </div>
-                  <div className="flex-shrink-0 text-right">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="font-mono">{subline}</span>
+                    <span>
+                      {conv.messageCount} msg
+                      {conv.messageCount === 1 ? "" : "s"}
+                    </span>
+                    <span className="ml-auto shrink-0">
                       {formatTime(conv.endTime)}
-                    </div>
+                    </span>
                   </div>
                 </div>
               </Link>
