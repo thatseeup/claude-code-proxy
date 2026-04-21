@@ -4,11 +4,13 @@ import {
   Link,
   useFetcher,
   useLoaderData,
+  useNavigation,
   useParams,
+  useRevalidator,
   useRouteLoaderData,
   useSearchParams,
 } from "@remix-run/react";
-import { ArrowLeftRight, Brain, Sparkles, Zap } from "lucide-react";
+import { ArrowLeftRight, Brain, RefreshCw, Sparkles, Zap } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import HorizontalSplit from "../components/HorizontalSplit";
@@ -198,6 +200,10 @@ export default function RequestsForSession() {
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const rid = searchParams.get("rid") ?? "";
+  const revalidator = useRevalidator();
+  const navigation = useNavigation();
+  const isReloading =
+    revalidator.state !== "idle" || navigation.state !== "idle";
 
   const summarySelected =
     requests.find((r) => r.requestId === rid) ??
@@ -285,8 +291,22 @@ export default function RequestsForSession() {
         activeSessionId={activeSessionToken}
       />
       <div className="bg-gray-50 dark:bg-slate-800 px-3 py-2 border-b border-gray-200 dark:border-slate-700 shrink-0 flex items-center justify-between gap-2">
-        <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          {requests.length} request{requests.length === 1 ? "" : "s"}
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => revalidator.revalidate()}
+            disabled={isReloading}
+            aria-label="Reload requests"
+            title="Reload"
+            className="shrink-0 p-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 hover:bg-gray-200 dark:hover:text-white dark:hover:bg-slate-700 disabled:opacity-50 disabled:hover:bg-transparent"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isReloading ? "animate-spin" : ""}`}
+            />
+          </button>
+          <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            {requests.length} request{requests.length === 1 ? "" : "s"}
+          </div>
         </div>
         <div className="inline-flex items-center bg-gray-100 dark:bg-slate-700 rounded p-0.5 space-x-0.5">
           {[
