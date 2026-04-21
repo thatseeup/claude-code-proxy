@@ -479,16 +479,25 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 	var messageStartRaw json.RawMessage
 
 	scanner := bufio.NewScanner(resp.Body)
+	// Raise the per-line limit: a single `data:` line carrying a large
+	// `input_json_delta` can exceed the default 64KB and cause the scanner to
+	// silently stop with ErrTooLong.
+	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if line == "" || !strings.HasPrefix(line, "data:") {
-			continue
-		}
 
+		// Forward every upstream line verbatim (including `event:` and blank
+		// event-separator lines) so the client sees the exact SSE framing.
+		// Filtering to `data:` only broke Claude Code's SSE parser and caused
+		// it to fall back to a non-stream retry of the same request.
 		streamingChunks = append(streamingChunks, line)
-		fmt.Fprintf(w, "%s\n\n", line)
+		fmt.Fprintf(w, "%s\n", line)
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
+		}
+
+		if !strings.HasPrefix(line, "data:") {
+			continue
 		}
 
 		jsonData := strings.TrimPrefix(line, "data: ")
