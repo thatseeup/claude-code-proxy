@@ -495,6 +495,16 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 				if cacheRead, ok := usage["cache_read_input_tokens"].(float64); ok {
 					finalUsage.CacheReadInputTokens = int(cacheRead)
 				}
+				if cacheCreationObj, ok := usage["cache_creation"].(map[string]interface{}); ok {
+					cc := &model.AnthropicCacheCreation{}
+					if v, ok := cacheCreationObj["ephemeral_5m_input_tokens"].(float64); ok {
+						cc.Ephemeral5mInputTokens = int(v)
+					}
+					if v, ok := cacheCreationObj["ephemeral_1h_input_tokens"].(float64); ok {
+						cc.Ephemeral1hInputTokens = int(v)
+					}
+					finalUsage.CacheCreation = cc
+				}
 
 			}
 		}

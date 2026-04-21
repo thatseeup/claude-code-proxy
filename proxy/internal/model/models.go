@@ -65,11 +65,17 @@ type ChatCompletionRequest struct {
 }
 
 type AnthropicUsage struct {
-	InputTokens              int    `json:"input_tokens"`
-	OutputTokens             int    `json:"output_tokens"`
-	CacheCreationInputTokens int    `json:"cache_creation_input_tokens,omitempty"`
-	CacheReadInputTokens     int    `json:"cache_read_input_tokens,omitempty"`
-	ServiceTier              string `json:"service_tier,omitempty"`
+	InputTokens              int                     `json:"input_tokens"`
+	OutputTokens             int                     `json:"output_tokens"`
+	CacheCreationInputTokens int                     `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int                     `json:"cache_read_input_tokens,omitempty"`
+	CacheCreation            *AnthropicCacheCreation `json:"cache_creation,omitempty"`
+	ServiceTier              string                  `json:"service_tier,omitempty"`
+}
+
+type AnthropicCacheCreation struct {
+	Ephemeral5mInputTokens int `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
 }
 
 type AnthropicResponse struct {
