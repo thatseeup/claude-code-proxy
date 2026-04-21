@@ -9,7 +9,7 @@ import {
   useSearchParams,
 } from "@remix-run/react";
 import { ArrowLeftRight, Brain, Sparkles, Zap } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import HorizontalSplit from "../components/HorizontalSplit";
 import RequestDetailContent from "../components/RequestDetailContent";
@@ -172,6 +172,46 @@ export default function RequestsForSession() {
     setSearchParams(next, { replace: false });
   };
 
+  const selectedRef = useRef<HTMLAnchorElement | null>(null);
+
+  useEffect(() => {
+    if (requests.length === 0) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+      const currentIdx = requests.findIndex(
+        (r) => r.requestId === (selected?.requestId ?? "")
+      );
+      const baseIdx = currentIdx === -1 ? 0 : currentIdx;
+      const nextIdx =
+        e.key === "ArrowDown"
+          ? Math.min(requests.length - 1, baseIdx + 1)
+          : Math.max(0, baseIdx - 1);
+      if (nextIdx === currentIdx) return;
+      e.preventDefault();
+      const next = new URLSearchParams(searchParams);
+      next.set("rid", requests[nextIdx].requestId);
+      setSearchParams(next, { replace: false });
+    };
+    globalThis.addEventListener("keydown", handleKey);
+    return () => globalThis.removeEventListener("keydown", handleKey);
+  }, [requests, selected?.requestId, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selected?.requestId]);
+
   const activeSessionToken =
     sessionIdToken === "" ? UNKNOWN_TOKEN : sessionIdToken;
 
@@ -249,6 +289,7 @@ export default function RequestsForSession() {
             return (
               <Link
                 key={req.requestId}
+                ref={isSelected ? selectedRef : undefined}
                 to={`/requests/${encodeURIComponent(
                   params.sessionId ?? ""
                 )}?${nextParams.toString()}`}
