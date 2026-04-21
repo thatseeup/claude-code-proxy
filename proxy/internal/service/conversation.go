@@ -231,25 +231,125 @@ func (cs *conversationService) GetProjects() ([]ProjectSummary, error) {
 	return summaries, nil
 }
 
-// projectDisplayName derives a short human-readable label from Claude Code's
-// encoded project path (e.g. "-Users-syoh-Development-thatseeup-claude-code-proxy"
-// → "claude-code-proxy"). Falls back to the raw path when no hyphen is found.
-func projectDisplayName(projectPath string) string {
-	trimmed := strings.TrimPrefix(projectPath, "-")
-	if trimmed == "" {
-		return projectPath
+// dirExistsOnDisk is the default existsFn used by decodeProjectPath. It reports
+// whether the given absolute path exists and is a directory on the local file
+// system.
+func dirExistsOnDisk(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && info.IsDir()
+}
+
+// decodeProjectPath progressively reconstructs an encoded Claude Code project
+// path (e.g. "-Users-syoh-Development-thatseeup-claude-code-proxy") back into
+// its original directory path by probing the file system. Because Claude Code
+// replaces path separators with "-", the mapping is ambiguous whenever a
+// directory name itself contains "-" (such as "claude-code-proxy"). We resolve
+// the ambiguity greedily from the left: starting with "/", we consume encoded
+// tokens one by one and extend the resolved path with the longest suffix that
+// still exists as a directory. Tokens that cannot be absorbed form the
+// remainder, re-joined with "-" (preserving the original encoded spelling for
+// the unresolved tail).
+//
+// Return values:
+//   - resolved: the longest existing directory prefix (without trailing slash),
+//     or "" if not even the first token exists.
+//   - remainder: the leftover encoded tail joined by "-" (without leading "-"),
+//     or "" if the entire encoded path resolved successfully.
+//
+// existsFn is injected so callers (mainly tests) can drive the algorithm
+// without touching the real file system. Pass nil to use the default os.Stat
+// based probe.
+func decodeProjectPath(encoded string, existsFn func(string) bool) (resolved string, remainder string) {
+	if existsFn == nil {
+		existsFn = dirExistsOnDisk
 	}
 
-	// Split on hyphens and return the last non-empty segment as the label —
-	// claude-code's encoding replaces path separators with hyphens, so the
-	// final segment is typically the project directory name. For projects
-	// whose own folder name contains hyphens, this yields only the last
-	// token, which is a minor cosmetic loss acceptable for sidebar use.
-	parts := strings.Split(trimmed, "-")
-	for i := len(parts) - 1; i >= 0; i-- {
-		if parts[i] != "" {
-			return parts[i]
+	if encoded == "" {
+		return "", ""
+	}
+
+	trimmed := strings.TrimPrefix(encoded, "-")
+	if trimmed == "" {
+		return "", ""
+	}
+
+	tokens := strings.Split(trimmed, "-")
+
+	// Walk tokens left-to-right. At each step, consume one or more tokens joined
+	// by "-" to form a single path segment, choosing the LONGEST run whose
+	// concatenation still exists as a directory under the currently resolved
+	// prefix. Preferring the longest run keeps multi-hyphen directory names
+	// ("claude-code-proxy", "my-app") intact even when intermediate
+	// sub-combinations ("claude", "my") do not exist on disk.
+	resolved = ""
+	i := 0
+	for i < len(tokens) {
+		if tokens[i] == "" {
+			// Consecutive hyphens in the encoded string — treat as a literal
+			// separator we cannot resolve further.
+			break
 		}
+
+		// Find the longest j>i such that joining tokens[i:j] with "-" yields
+		// an existing directory under resolved.
+		bestJ := 0
+		for j := i + 1; j <= len(tokens); j++ {
+			segment := strings.Join(tokens[i:j], "-")
+			var candidate string
+			if resolved == "" {
+				candidate = "/" + segment
+			} else {
+				candidate = resolved + "/" + segment
+			}
+			if existsFn(candidate) {
+				bestJ = j
+			}
+		}
+
+		if bestJ == 0 {
+			// No extension from position i resolved — remaining tokens are
+			// the remainder.
+			break
+		}
+
+		segment := strings.Join(tokens[i:bestJ], "-")
+		if resolved == "" {
+			resolved = "/" + segment
+		} else {
+			resolved = resolved + "/" + segment
+		}
+		i = bestJ
+	}
+
+	if i >= len(tokens) {
+		return resolved, ""
+	}
+
+	remainder = strings.Join(tokens[i:], "-")
+	return resolved, remainder
+}
+
+// projectDisplayName derives a short human-readable label from Claude Code's
+// encoded project path (e.g. "-Users-syoh-Development-thatseeup-claude-code-proxy"
+// → "claude-code-proxy"). It delegates to decodeProjectPath so that multi-hyphen
+// directory names are preserved whenever the actual directory still exists on
+// disk. When part of the encoded path is unresolved, the unresolved tail is
+// returned as-is (re-joined with "-"); when the entire path resolves, the
+// final path segment is returned.
+func projectDisplayName(projectPath string) string {
+	return projectDisplayNameWith(projectPath, nil)
+}
+
+// projectDisplayNameWith is the test-injectable variant of projectDisplayName.
+// A nil existsFn delegates to the default os.Stat based probe inside
+// decodeProjectPath.
+func projectDisplayNameWith(projectPath string, existsFn func(string) bool) string {
+	resolved, remainder := decodeProjectPath(projectPath, existsFn)
+	if remainder != "" {
+		return remainder
+	}
+	if resolved != "" {
+		return filepath.Base(resolved)
 	}
 	return projectPath
 }

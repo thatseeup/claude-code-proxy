@@ -43,7 +43,7 @@ claude-code-proxy/
         openai.go             — Anthropic→OpenAI 요청 변환, OpenAI→Anthropic 응답/스트림 변환
       service/
         anthropic.go          — (레거시) AnthropicService, 직접 /v1/messages 포워딩
-        conversation.go       — ~/.claude/projects/*.jsonl 파싱 (Claude Code 대화 기록) + `GetProjects()` 프로젝트 요약 (mtime DESC)
+        conversation.go       — ~/.claude/projects/*.jsonl 파싱 (Claude Code 대화 기록) + `GetProjects()` 프로젝트 요약 (mtime DESC). `decodeProjectPath` 가 encoded CWD(`-Users-...-claude-code-proxy`) 를 파일 시스템 stat 으로 점층 복원 → `projectDisplayName` 이 실제 폴더 이름(`claude-code-proxy`) 또는 미확인 remainder 반환
         model_router.go       — 모델 prefix 매칭 + subagent 해시 매칭 라우팅 결정
         model_router_test.go  — 라우터 edge case 테스트
         storage.go            — StorageService 인터페이스 정의 (`GetRequestsBySessionID`, `GetSessionSummaries`, `DeleteRequestsBySessionID` 포함), SessionSummary 타입
@@ -287,5 +287,6 @@ CREATE TABLE requests (
 | Dockerfile CGO_ENABLED=1 | go-sqlite3 는 CGO 필수. 0 으로 바꾸면 빌드 실패 |
 | `api.grade-prompt.tsx` | Remix 쪽은 존재하나 Go 백엔드에 `/api/grade-prompt` 라우트 미등록 (main.go). 사용 시 404 — 백엔드 추가 필요 |
 | `~/.claude/projects/*.jsonl` 파싱 위치 | `NewConversationService()` 가 `os.UserHomeDir()` 사용 — Docker 내부에서는 경로 다름, 컨테이너에서는 conversation 기능 무효 |
+| `decodeProjectPath` / `projectDisplayName` (conversation.go) | encoded CWD 를 파일 시스템 stat 으로 복원 — 세그먼트 단위 lookahead 로 하이픈 포함 폴더명(`claude-code-proxy`) 을 정확히 복원. 디스크에 프로젝트가 없으면 remainder 그대로 반환. `GetProjects` 호출마다 stat 발생(캐시 없음), stub `existsFn` 주입 가능(`projectDisplayNameWith`) |
 | `HorizontalSplit.tsx` mousemove/mouseup 리스너 정리 | `onMouseDown` 이 `window` 레벨 리스너 등록 → `onUp` 에서 반드시 제거 + 언마운트 cleanup 으로 body `userSelect/cursor` 복원. 누락 시 드래그 종료 후에도 커서가 `col-resize` 에 고정 / 메모리 누수 |
 | Split 상태 영속화 금지 | 요구사항상 localStorage/쿠키/서버 저장 없이 매 세션 디폴트로 복귀. `HorizontalSplit` 는 `defaultLeftWidth=420` 로 마운트 시 리셋 — 변경 시 UX 회귀 주의 |
