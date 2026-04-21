@@ -1,7 +1,7 @@
 import { MessageCircle, Clock, Sparkles, ChevronDown, ChevronRight, GitBranch, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 import { MessageFlow } from './MessageFlow'
-import { formatLargeText } from '../utils/formatters';
+import { formatLargeText, formatStableTime } from '../utils/formatters';
 
 interface ConversationThreadProps {
   conversation: {
@@ -150,7 +150,7 @@ export function ConversationThread({ conversation }: ConversationThreadProps) {
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-              {new Date(messages[messages.length - 1]?.timestamp).toLocaleTimeString()}
+              {formatStableTime(messages.at(-1)?.timestamp)}
             </span>
             {expandedSections.has('flow') ? (
               <ChevronDown className="w-5 h-5 text-gray-400" />
@@ -191,7 +191,7 @@ export function ConversationThread({ conversation }: ConversationThreadProps) {
               <div className="text-right text-xs text-blue-700">
                 <div className="flex items-center space-x-1">
                   <Clock className="w-3 h-3" />
-                  <span>Latest: {new Date().toLocaleTimeString()}</span>
+                  <span>Latest: {formatStableTime(new Date())}</span>
                 </div>
               </div>
             </div>

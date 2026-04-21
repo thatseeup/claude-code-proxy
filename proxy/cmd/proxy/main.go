@@ -70,6 +70,7 @@ func main() {
 	r.HandleFunc("/ui", h.UI).Methods("GET")
 	r.HandleFunc("/api/requests", h.GetRequests).Methods("GET")
 	r.HandleFunc("/api/requests", h.DeleteRequests).Methods("DELETE")
+	r.HandleFunc("/api/requests/{id}", h.GetRequestByID).Methods("GET")
 	r.HandleFunc("/api/sessions", h.GetSessions).Methods("GET")
 	r.HandleFunc("/api/sessions/{id}", h.DeleteSession).Methods("DELETE")
 	r.HandleFunc("/api/projects", h.GetProjects).Methods("GET")

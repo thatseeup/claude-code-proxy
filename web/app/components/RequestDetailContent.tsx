@@ -21,7 +21,7 @@ import {
   Wrench
 } from 'lucide-react';
 import { MessageContent } from './MessageContent';
-import { formatJSON, formatRawHeaders } from '../utils/formatters';
+import { formatJSON, formatRawHeaders, formatStableDateTime } from '../utils/formatters';
 import { getChatCompletionsEndpoint, getProviderName } from '../utils/models';
 
 interface Request {
@@ -666,7 +666,7 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
   };
 
   const statusColors = getStatusColor(response.statusCode);
-  const completedAt = response.completedAt ? new Date(response.completedAt).toLocaleString() : 'Unknown';
+  const completedAt = response.completedAt ? formatStableDateTime(response.completedAt) : 'Unknown';
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm border-l-4 border-l-blue-500">
@@ -1144,7 +1144,7 @@ function RequestOverviewTable({ request }: { readonly request: Request }) {
   const rows: Array<{ label: string; value: React.ReactNode }> = [
     {
       label: 'Timestamp',
-      value: <span className="text-gray-900">{new Date(request.timestamp).toLocaleString()}</span>,
+      value: <span className="text-gray-900">{formatStableDateTime(request.timestamp)}</span>,
     },
     {
       label: 'Method/URL',
@@ -1269,7 +1269,7 @@ function ResponseOverviewTable({ response }: { readonly response: NonNullable<Re
     if (raw === undefined || raw === null || raw === '') return '없음';
     const n = Number(raw);
     if (!Number.isFinite(n)) return raw;
-    return new Date(n * 1000).toLocaleString();
+    return formatStableDateTime(n * 1000);
   };
 
   const formatRatelimitRow = (

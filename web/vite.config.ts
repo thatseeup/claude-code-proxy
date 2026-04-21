@@ -26,6 +26,14 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3001",
         changeOrigin: true,
+        // Let Remix handle its own route loaders (which use `.data` suffix
+        // under v3 single-fetch) instead of forwarding them to the Go backend.
+        bypass: (req) => {
+          if (req.url?.includes(".data")) {
+            return req.url;
+          }
+          return null;
+        },
       },
     },
   },

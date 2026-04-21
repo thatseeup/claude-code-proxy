@@ -47,9 +47,12 @@ export function formatJSON(obj: any): string {
  * Escapes HTML characters to prevent XSS
  */
 export function escapeHtml(text: string): string {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 /**
@@ -145,6 +148,52 @@ export function formatTimestamp(timestamp: string | Date): string {
   } catch {
     return String(timestamp);
   }
+}
+
+export type DateInput = string | number | Date | null | undefined;
+
+function toValidDate(input: DateInput): Date | null {
+  if (input === null || input === undefined || input === "") return null;
+  const d = new Date(input);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * SSR-safe date formatter (locale-independent): YYYY-MM-DD
+ */
+export function formatStableDate(input: DateInput): string {
+  const d = toValidDate(input);
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * SSR-safe time formatter (locale-independent): HH:mm:ss
+ */
+export function formatStableTime(input: DateInput): string {
+  const d = toValidDate(input);
+  if (!d) return "";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${hh}:${mi}:${ss}`;
+}
+
+/**
+ * SSR-safe combined date+time formatter: YYYY-MM-DD HH:mm
+ */
+export function formatStableDateTime(input: DateInput): string {
+  const d = toValidDate(input);
+  if (!d) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 }
 
 /**

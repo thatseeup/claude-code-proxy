@@ -231,6 +231,20 @@ func (h *Handler) GetRequests(w http.ResponseWriter, r *http.Request) {
 		requests = requests[start:end]
 	}
 
+	// When summary=true, strip large fields (request/response bodies, raw/streaming chunks).
+	// Used by list views that only need metadata (timestamp, model, token usage, responseTime).
+	if r.URL.Query().Get("summary") == "true" {
+		for i := range requests {
+			requests[i].Body = nil
+			requests[i].BodyRaw = ""
+			if requests[i].Response != nil {
+				requests[i].Response.Body = summarizeResponseBody(requests[i].Response.Body)
+				requests[i].Response.BodyText = ""
+				requests[i].Response.StreamingChunks = nil
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(struct {
 		Requests []model.RequestLog `json:"requests"`
@@ -239,6 +253,50 @@ func (h *Handler) GetRequests(w http.ResponseWriter, r *http.Request) {
 		Requests: requests,
 		Total:    total,
 	})
+}
+
+// summarizeResponseBody keeps only the `usage` field from an Anthropic-style response body
+// so that list views retain token counts without the full content payload.
+func summarizeResponseBody(body json.RawMessage) json.RawMessage {
+	if len(body) == 0 {
+		return nil
+	}
+	var parsed struct {
+		Usage json.RawMessage `json:"usage,omitempty"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil || len(parsed.Usage) == 0 {
+		return nil
+	}
+	out, err := json.Marshal(struct {
+		Usage json.RawMessage `json:"usage"`
+	}{Usage: parsed.Usage})
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// GetRequestByID returns a single full request (including body/response) by its short id.
+// Used by list views to fetch the currently-selected request on demand, avoiding the need
+// to load every request's body up front (which can exceed Node's max string length).
+func (h *Handler) GetRequestByID(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	if id == "" {
+		http.Error(w, "Missing request id", http.StatusBadRequest)
+		return
+	}
+	req, _, err := h.storageService.GetRequestByShortID(id)
+	if err != nil {
+		log.Printf("Error getting request %s: %v", id, err)
+		http.Error(w, "Failed to get request", http.StatusInternalServerError)
+		return
+	}
+	if req == nil {
+		http.Error(w, "Request not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(req)
 }
 
 func (h *Handler) DeleteRequests(w http.ResponseWriter, r *http.Request) {

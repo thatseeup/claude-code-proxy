@@ -144,11 +144,10 @@ export function MessageFlow({ message, index, isLast, totalMessages }: MessageFl
   const formatTimestamp = (timestamp: string) => {
     try {
       const date = new Date(timestamp);
-      return date.toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
-      });
+      if (Number.isNaN(date.getTime())) return timestamp;
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mi = String(date.getMinutes()).padStart(2, '0');
+      return `${hh}:${mi}`;
     } catch {
       return timestamp;
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, Check, FileCode, Download, Maximize2, X } from 'lucide-react';
 
 interface CodeViewerProps {
@@ -10,6 +10,11 @@ interface CodeViewerProps {
 export function CodeViewer({ code, fileName, language }: CodeViewerProps) {
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Determine language from file extension
   const getLanguageFromFileName = (filename?: string): string => {
@@ -199,7 +204,11 @@ export function CodeViewer({ code, fileName, language }: CodeViewerProps) {
                   {idx + 1}
                 </td>
                 <td className="px-4 py-0.5 whitespace-pre text-gray-300">
-                  <span dangerouslySetInnerHTML={{ __html: highlightCode(line) }} />
+                  {mounted ? (
+                    <span dangerouslySetInnerHTML={{ __html: highlightCode(line) }} />
+                  ) : (
+                    <span>{line}</span>
+                  )}
                 </td>
               </tr>
             ))}

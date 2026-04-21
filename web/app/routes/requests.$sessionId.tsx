@@ -2,17 +2,20 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import {
   Link,
+  useFetcher,
   useLoaderData,
   useParams,
   useRouteLoaderData,
   useSearchParams,
 } from "@remix-run/react";
 import { ArrowLeftRight, Brain, Sparkles, Zap } from "lucide-react";
+import { useEffect } from "react";
 
 import HorizontalSplit from "../components/HorizontalSplit";
 import RequestDetailContent from "../components/RequestDetailContent";
 import SessionPicker from "../components/SessionPicker";
 import type { SessionSummary } from "../components/SessionPicker";
+import { formatStableDate, formatStableTime } from "../utils/formatters";
 import { getChatCompletionsEndpoint } from "../utils/models";
 
 interface RequestLog {
@@ -48,9 +51,12 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   if (modelFilter !== "all") {
     backendUrl.searchParams.set("model", modelFilter);
   }
-  // Pull a generous page so we can render all requests for a single session.
   backendUrl.searchParams.set("page", "1");
   backendUrl.searchParams.set("limit", "1000");
+  // Strip large fields (request/response bodies, streaming chunks) to keep the
+  // list payload small. Individual request details are fetched on demand via
+  // /api/requests/:id when the user selects a row.
+  backendUrl.searchParams.set("summary", "true");
 
   let requests: RequestLog[] = [];
   let total = 0;
@@ -74,6 +80,26 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     sessionIdToken,
     modelFilter,
   });
+}
+
+// Don't refetch the (large) list when only `?rid=` changes — row selection only
+// needs to trigger the detail fetch, not the list loader.
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}: {
+  currentUrl: URL;
+  nextUrl: URL;
+  defaultShouldRevalidate: boolean;
+}) {
+  if (
+    currentUrl.pathname === nextUrl.pathname &&
+    currentUrl.searchParams.get("model") === nextUrl.searchParams.get("model")
+  ) {
+    return false;
+  }
+  return defaultShouldRevalidate;
 }
 
 function modelBadge(model: string | undefined) {
@@ -110,9 +136,27 @@ export default function RequestsForSession() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rid = searchParams.get("rid") ?? "";
 
-  const selected =
+  const summarySelected =
     requests.find((r) => r.requestId === rid) ??
     (rid === "" && requests.length > 0 ? requests[0] : undefined);
+
+  // Fetch full detail (request/response bodies) for the selected row on demand.
+  // The list loader only returns summary payloads to keep responses small.
+  const detailFetcher = useFetcher<RequestLog>();
+  const targetRid = summarySelected?.requestId ?? "";
+  useEffect(() => {
+    if (!targetRid) return;
+    detailFetcher.load(
+      `/api/requests/${encodeURIComponent(targetRid)}`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetRid]);
+
+  const detail =
+    detailFetcher.data && detailFetcher.data.requestId === targetRid
+      ? detailFetcher.data
+      : undefined;
+  const selected = detail ?? summarySelected;
 
   const handleModelFilter = (newFilter: string) => {
     const next = new URLSearchParams(searchParams);
@@ -267,10 +311,10 @@ export default function RequestsForSession() {
                   </div>
                   <div className="flex-shrink-0 text-right">
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(req.timestamp).toLocaleDateString()}
+                      {formatStableDate(req.timestamp)}
                     </div>
                     <div className="text-xs text-gray-400 dark:text-gray-500">
-                      {new Date(req.timestamp).toLocaleTimeString()}
+                      {formatStableTime(req.timestamp)}
                     </div>
                   </div>
                 </div>
