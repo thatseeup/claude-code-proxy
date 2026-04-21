@@ -185,6 +185,7 @@ CREATE TABLE requests (
 - 경로: `~/.claude/projects/<encoded-cwd>/<sessionID>.jsonl`
 - 각 라인: `ConversationMessage { parentUuid, isSidechain, userType, cwd, sessionId, version, type, message(raw), uuid, timestamp }`
 - 버퍼 크기: 10MB per line
+- `type == "ai-title" | "custom-title"` 라인은 세션 타이틀 이벤트 — `parseConversationFile` 가 `extractTitleFromLine` 으로 추출해 `Conversation.Title` 에 마지막 등장값을 저장(파일 라인 순서 기준)하고 `messages` 에서 제외. 필드 우선순위: `customTitle` → `aiTitle`. UI(`conversations.$projectId.tsx`)는 `title` 우선, 없으면 `firstUserText` 폴백
 
 ### Subagent 라우팅 구조 (model_router.go)
 - `SubagentDefinition { Name, TargetModel, TargetProvider, FullPrompt }`

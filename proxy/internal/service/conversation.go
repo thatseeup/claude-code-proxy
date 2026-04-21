@@ -59,6 +59,7 @@ type Conversation struct {
 	SessionID    string                 `json:"sessionId"`
 	ProjectPath  string                 `json:"projectPath"`
 	ProjectName  string                 `json:"projectName"`
+	Title        string                 `json:"title"`
 	Messages     []*ConversationMessage `json:"messages"`
 	StartTime    time.Time              `json:"startTime"`
 	EndTime      time.Time              `json:"endTime"`
@@ -370,6 +371,7 @@ func (cs *conversationService) parseConversationFile(filePath, projectPath strin
 
 	var messages []*ConversationMessage
 	var parseErrors int
+	var title string
 	lineNum := 0
 
 	scanner := bufio.NewScanner(file)
@@ -394,6 +396,16 @@ func (cs *conversationService) parseConversationFile(filePath, projectPath strin
 			// Log only first few errors to avoid spam
 			if parseErrors <= 3 {
 				// Skip malformed line
+			}
+			continue
+		}
+
+		// ai-title / custom-title lines carry the session title. The latest
+		// occurrence (regardless of type) wins. They are not conversational
+		// messages, so strip them from the messages slice.
+		if msg.Type == "ai-title" || msg.Type == "custom-title" {
+			if t := extractTitleFromLine(line); t != "" {
+				title = t
 			}
 			continue
 		}
@@ -440,6 +452,7 @@ func (cs *conversationService) parseConversationFile(filePath, projectPath strin
 			SessionID:    sessionID,
 			ProjectPath:  projectPath,
 			ProjectName:  projectName,
+			Title:        title,
 			Messages:     messages,
 			StartTime:    time.Time{},
 			EndTime:      time.Time{},
@@ -483,10 +496,28 @@ func (cs *conversationService) parseConversationFile(filePath, projectPath strin
 		SessionID:    sessionID,
 		ProjectPath:  projectPath,
 		ProjectName:  projectName,
+		Title:        title,
 		Messages:     messages,
 		StartTime:    startTime,
 		EndTime:      endTime,
 		MessageCount: len(messages),
 		FileModTime:  fileInfo.ModTime(),
 	}, nil
+}
+
+// extractTitleFromLine pulls the session title out of an ai-title/custom-title
+// jsonl line. Both shapes are accepted: {"aiTitle":"..."} and
+// {"customTitle":"..."}. Returns "" if neither field is present or non-empty.
+func extractTitleFromLine(line []byte) string {
+	var raw struct {
+		AITitle     string `json:"aiTitle"`
+		CustomTitle string `json:"customTitle"`
+	}
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return ""
+	}
+	if raw.CustomTitle != "" {
+		return raw.CustomTitle
+	}
+	return raw.AITitle
 }

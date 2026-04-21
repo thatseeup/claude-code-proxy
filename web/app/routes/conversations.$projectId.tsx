@@ -8,6 +8,7 @@ import {
   useSearchParams,
 } from "@remix-run/react";
 import { MessageCircle } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { ConversationThread } from "../components/ConversationThread";
 import HorizontalSplit from "../components/HorizontalSplit";
@@ -31,6 +32,7 @@ interface Conversation {
   sessionId: string;
   projectPath: string;
   projectName: string;
+  title: string;
   messages: ConversationMessage[];
   startTime: string;
   endTime: string;
@@ -133,6 +135,44 @@ export default function ConversationsForProject() {
     setSearchParams(next, { replace: false });
   };
 
+  const selectedRef = useRef<HTMLAnchorElement | null>(null);
+
+  useEffect(() => {
+    if (conversations.length === 0) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+      const currentIdx = conversations.findIndex(
+        (c) => c.sessionId === (selected?.sessionId ?? "")
+      );
+      const baseIdx = currentIdx === -1 ? 0 : currentIdx;
+      const nextIdx =
+        e.key === "ArrowDown"
+          ? Math.min(conversations.length - 1, baseIdx + 1)
+          : Math.max(0, baseIdx - 1);
+      if (nextIdx === currentIdx) return;
+      e.preventDefault();
+      handleSelect(conversations[nextIdx].sessionId);
+    };
+    globalThis.addEventListener("keydown", handleKey);
+    return () => globalThis.removeEventListener("keydown", handleKey);
+  }, [conversations, selected?.sessionId, searchParams]);
+
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selected?.sessionId]);
+
   const listPane = (
     <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden h-full flex flex-col mr-2">
       <ProjectPicker projects={projects} activeProjectId={projectPath} />
@@ -154,12 +194,15 @@ export default function ConversationsForProject() {
           conversations.map((conv) => {
             const isSelected =
               conv.sessionId === (selected?.sessionId ?? "");
-            const preview = firstUserText(conv as unknown as Conversation);
+            const preview =
+              conv.title?.trim() ||
+              firstUserText(conv as unknown as Conversation);
             const nextParams = new URLSearchParams(searchParams);
             nextParams.set("sid", conv.sessionId);
             return (
               <Link
                 key={conv.sessionId}
+                ref={isSelected ? selectedRef : undefined}
                 to={`/conversations/${encodeURIComponent(
                   params.projectId ?? ""
                 )}?${nextParams.toString()}`}
@@ -209,11 +252,16 @@ export default function ConversationsForProject() {
 
   const detailPane = selected ? (
     <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg h-full flex flex-col ml-2">
-      <div className="bg-gray-50 dark:bg-slate-800 px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
-          Conversation
+      <div className="bg-gray-50 dark:bg-slate-800 px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between gap-4 shrink-0">
+        <h2
+          className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate min-w-0"
+          title={selected.title?.trim() || undefined}
+        >
+          {selected.title?.trim() || (
+            <span className="uppercase tracking-wider">Conversation</span>
+          )}
         </h2>
-        <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+        <span className="text-xs font-mono text-gray-500 dark:text-gray-400 shrink-0">
           {selected.sessionId}
         </span>
       </div>
