@@ -235,7 +235,7 @@ func (h *Handler) GetRequests(w http.ResponseWriter, r *http.Request) {
 	// Used by list views that only need metadata (timestamp, model, token usage, responseTime).
 	if r.URL.Query().Get("summary") == "true" {
 		for i := range requests {
-			requests[i].Body = nil
+			requests[i].Body = summarizeRequestBody(requests[i].BodyRaw)
 			requests[i].BodyRaw = ""
 			if requests[i].Response != nil {
 				requests[i].Response.Body = summarizeResponseBody(requests[i].Response.Body)
@@ -255,23 +255,76 @@ func (h *Handler) GetRequests(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// summarizeResponseBody keeps only the `usage` field from an Anthropic-style response body
-// so that list views retain token counts without the full content payload.
+// summarizeResponseBody keeps only fields needed by list views (usage, stop_reason)
+// from an Anthropic-style response body, dropping the full content payload.
 func summarizeResponseBody(body json.RawMessage) json.RawMessage {
 	if len(body) == 0 {
 		return nil
 	}
 	var parsed struct {
-		Usage json.RawMessage `json:"usage,omitempty"`
+		Usage      json.RawMessage `json:"usage,omitempty"`
+		StopReason string          `json:"stop_reason,omitempty"`
 	}
-	if err := json.Unmarshal(body, &parsed); err != nil || len(parsed.Usage) == 0 {
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil
+	}
+	if len(parsed.Usage) == 0 && parsed.StopReason == "" {
 		return nil
 	}
 	out, err := json.Marshal(struct {
-		Usage json.RawMessage `json:"usage"`
-	}{Usage: parsed.Usage})
+		Usage      json.RawMessage `json:"usage,omitempty"`
+		StopReason string          `json:"stop_reason,omitempty"`
+	}{Usage: parsed.Usage, StopReason: parsed.StopReason})
 	if err != nil {
 		return nil
+	}
+	return out
+}
+
+// summarizeRequestBody extracts only the fields needed by list views
+// (stream flag, first-two system entries for agent detection) from the raw request body.
+// Returns nil when the body is empty or unparseable so the response field is omitted.
+func summarizeRequestBody(raw string) interface{} {
+	if raw == "" {
+		return nil
+	}
+	var parsed struct {
+		Stream bool              `json:"stream,omitempty"`
+		System []json.RawMessage `json:"system,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return nil
+	}
+	out := map[string]interface{}{
+		"stream": parsed.Stream,
+	}
+	// Keep only the first two system entries and trim each text to enough characters
+	// to match the "You are Claude Code" prefix without shipping the full prompt.
+	if len(parsed.System) > 0 {
+		limit := len(parsed.System)
+		if limit > 2 {
+			limit = 2
+		}
+		system := make([]map[string]string, 0, limit)
+		for i := 0; i < limit; i++ {
+			var entry struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			if err := json.Unmarshal(parsed.System[i], &entry); err != nil {
+				system = append(system, map[string]string{})
+				continue
+			}
+			const prefixLen = 64
+			if len(entry.Text) > prefixLen {
+				entry.Text = entry.Text[:prefixLen]
+			}
+			system = append(system, map[string]string{
+				"type": entry.Type,
+				"text": entry.Text,
+			})
+		}
+		out["system"] = system
 	}
 	return out
 }

@@ -16,7 +16,6 @@ import RequestDetailContent from "../components/RequestDetailContent";
 import SessionPicker from "../components/SessionPicker";
 import type { SessionSummary } from "../components/SessionPicker";
 import { formatStableDate, formatStableTime } from "../utils/formatters";
-import { getChatCompletionsEndpoint } from "../utils/models";
 
 interface RequestLog {
   requestId: string;
@@ -123,6 +122,70 @@ function statusPillClass(status: number) {
   if (status >= 300 && status < 400)
     return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300";
   return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
+}
+
+function isAgentSession(body: any): boolean {
+  const system = body?.system;
+  if (!Array.isArray(system) || system.length < 2) return false;
+  const entry = system[1];
+  const text = typeof entry === "string" ? entry : entry?.text;
+  if (typeof text !== "string") return true;
+  return !text.startsWith("You are Claude Code");
+}
+
+function isStreamRequest(body: any): boolean {
+  return body?.stream === true;
+}
+
+function hitRatioChipClass(ratio: number): string {
+  if (ratio >= 0.9)
+    return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
+  if (ratio >= 0.5)
+    return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
+  return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
+}
+
+interface AnthropicUsageShape {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
+
+function UsageLine({ usage }: { usage?: AnthropicUsageShape }) {
+  if (!usage) return <span />;
+  const input = usage.input_tokens ?? 0;
+  const cacheCreation = usage.cache_creation_input_tokens ?? 0;
+  const cacheRead = usage.cache_read_input_tokens ?? 0;
+  const totalInput = input + cacheCreation + cacheRead;
+  const output = usage.output_tokens ?? 0;
+  const hitRatio = totalInput > 0 ? cacheRead / totalInput : 0;
+  return (
+    <span className="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 min-w-0 truncate">
+      <span className="truncate">
+        Input:{" "}
+        <span className="font-medium text-gray-900 dark:text-gray-100">
+          {input.toLocaleString()} + {cacheCreation.toLocaleString()} +{" "}
+          {cacheRead.toLocaleString()}
+        </span>
+      </span>
+      {totalInput > 0 && (
+        <span
+          className={`px-1.5 py-0.5 rounded font-medium shrink-0 ${hitRatioChipClass(
+            hitRatio
+          )}`}
+        >
+          {(hitRatio * 100).toFixed(1)}%
+        </span>
+      )}
+      <span className="shrink-0">
+        Output:{" "}
+        <span className="font-medium text-gray-900 dark:text-gray-100">
+          {output.toLocaleString()}
+        </span>
+      </span>
+    </span>
+  );
 }
 
 export default function RequestsForSession() {
@@ -300,66 +363,63 @@ export default function RequestsForSession() {
                     : "hover:bg-gray-50 dark:hover:bg-slate-800"
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0 mr-4">
-                    <div className="flex items-center space-x-3 mb-1">
-                      <h3 className="text-sm font-medium">
-                        {modelBadge(model)}
-                      </h3>
-                      {req.routedModel &&
-                        req.originalModel &&
-                        req.routedModel !== req.originalModel && (
-                          <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded font-medium flex items-center space-x-1">
-                            <ArrowLeftRight className="w-3 h-3" />
-                            <span>routed</span>
-                          </span>
-                        )}
-                      {typeof status === "number" && (
-                        <span
-                          className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusPillClass(
-                            status
-                          )}`}
-                        >
-                          {status}
+                <div className="flex items-start justify-between mb-1">
+                  <div className="flex-1 min-w-0 mr-4 flex items-center space-x-3">
+                    {isAgentSession(req.body) && (
+                      <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                        Agent
+                      </span>
+                    )}
+                    <h3 className="text-sm font-medium">
+                      {modelBadge(model)}
+                    </h3>
+                    {req.routedModel &&
+                      req.originalModel &&
+                      req.routedModel !== req.originalModel && (
+                        <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded font-medium flex items-center space-x-1">
+                          <ArrowLeftRight className="w-3 h-3" />
+                          <span>routed</span>
                         </span>
                       )}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 font-mono mb-1 truncate">
-                      {getChatCompletionsEndpoint(
-                        req.routedModel,
-                        req.endpoint
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-3 text-xs">
-                      {req.response?.body?.usage && (
-                        <span className="font-mono text-gray-600 dark:text-gray-400">
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {(
-                              (req.response.body.usage.input_tokens || 0) +
-                              (req.response.body.usage.output_tokens || 0)
-                            ).toLocaleString()}
-                          </span>{" "}
-                          tokens
-                        </span>
-                      )}
-                      {req.response?.responseTime && (
-                        <span className="font-mono text-gray-600 dark:text-gray-400">
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {(req.response.responseTime / 1000).toFixed(2)}
-                          </span>
-                          s
-                        </span>
-                      )}
-                    </div>
+                    {typeof status === "number" && (
+                      <span
+                        className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusPillClass(
+                          status
+                        )}`}
+                      >
+                        {status}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex-shrink-0 text-right">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatStableDate(req.timestamp)}
-                    </div>
-                    <div className="text-xs text-gray-400 dark:text-gray-500">
-                      {formatStableTime(req.timestamp)}
-                    </div>
+                  <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    {formatStableDate(req.timestamp)}{" "}
+                    {formatStableTime(req.timestamp)}
                   </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 mb-1 leading-none text-xs">
+                  <div className="flex items-center flex-wrap gap-1.5 min-w-0">
+                    {isStreamRequest(req.body) && (
+                      <span className="px-1.5 py-0.5 rounded font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                        Stream
+                      </span>
+                    )}
+                    {req.response?.body?.stop_reason && (
+                      <span className="px-1.5 py-0.5 rounded font-medium bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                        {req.response.body.stop_reason}
+                      </span>
+                    )}
+                  </div>
+                  {req.response?.responseTime != null && (
+                    <span className="font-mono text-gray-600 dark:text-gray-400 shrink-0">
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {(req.response.responseTime / 1000).toFixed(2)}
+                      </span>
+                      s
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center text-xs font-mono">
+                  <UsageLine usage={req.response?.body?.usage} />
                 </div>
               </Link>
             );
