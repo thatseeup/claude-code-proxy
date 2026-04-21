@@ -1319,9 +1319,9 @@ function ResponseOverviewTable({ response }: { readonly response: NonNullable<Re
   rows.push(
     { label: 'Body.id', value: mono(body?.id) },
     { label: 'Body.stop_reason', value: plainText(body?.stop_reason) },
-    { label: 'Body.usage.input_tokens', value: num(usage?.input_tokens) },
-    { label: 'Body.usage.cache_creation_input_tokens', value: num(usage?.cache_creation_input_tokens) },
     { label: 'Body.usage.cache_read_input_tokens', value: num(usage?.cache_read_input_tokens) },
+    { label: 'Body.usage.cache_creation_input_tokens', value: num(usage?.cache_creation_input_tokens) },
+    { label: 'Body.usage.input_tokens', value: num(usage?.input_tokens) },
     { label: 'Body.usage.output_tokens', value: num(usage?.output_tokens) },
   );
 
