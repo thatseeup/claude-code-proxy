@@ -300,12 +300,13 @@ func summarizeRequestBody(raw string) interface{} {
 	out := map[string]interface{}{
 		"stream": parsed.Stream,
 	}
-	// Keep only the first two system entries and trim each text to enough characters
-	// to match the "You are Claude Code" prefix without shipping the full prompt.
+	// Keep the first three system entries so that classifySession on the client can
+	// inspect system[2] (which on this Claude Code build holds the "You are an interactive
+	// agent" / "You are an agent for Claude Code" prefix).
 	if len(parsed.System) > 0 {
 		limit := len(parsed.System)
-		if limit > 2 {
-			limit = 2
+		if limit > 3 {
+			limit = 3
 		}
 		system := make([]map[string]string, 0, limit)
 		for i := 0; i < limit; i++ {
@@ -317,7 +318,7 @@ func summarizeRequestBody(raw string) interface{} {
 				system = append(system, map[string]string{})
 				continue
 			}
-			const prefixLen = 64
+			const prefixLen = 96
 			if len(entry.Text) > prefixLen {
 				entry.Text = entry.Text[:prefixLen]
 			}

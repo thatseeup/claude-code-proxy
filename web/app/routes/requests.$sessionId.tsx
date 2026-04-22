@@ -129,14 +129,56 @@ function statusPillClass(status: number) {
   return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 }
 
-function isAgentSession(body: any): boolean {
-  const system = body?.system;
-  if (!Array.isArray(system) || system.length < 2) return false;
-  const entry = system[1];
-  const text = typeof entry === "string" ? entry : entry?.text;
-  if (typeof text !== "string") return true;
-  return !text.startsWith("You are Claude Code");
+type SessionKind = "agent" | "security" | "main" | "other";
+
+function normalizeSystemText(raw: string): string {
+  return raw.replace(/^(?:\s|\\[rn])+/, "");
 }
+
+function systemEntryText(entry: unknown): string | undefined {
+  if (typeof entry === "string") return normalizeSystemText(entry);
+  if (entry && typeof entry === "object" && typeof (entry as { text?: unknown }).text === "string") {
+    return normalizeSystemText((entry as { text: string }).text);
+  }
+  return undefined;
+}
+
+function semanticSystemTexts(system: unknown): string[] {
+  if (!Array.isArray(system)) return [];
+  const texts: string[] = [];
+  for (const entry of system) {
+    const text = systemEntryText(entry);
+    if (text === undefined) continue;
+    if (text.startsWith("x-anthropic-billing-header")) continue;
+    texts.push(text);
+  }
+  return texts;
+}
+
+function classifySession(body: unknown): SessionKind {
+  const system = (body as { system?: unknown } | null | undefined)?.system;
+  const [s1, s2] = semanticSystemTexts(system);
+  if (s1?.startsWith("You are a Claude agent")) return "agent";
+  if (s1?.startsWith("You are a security monitor")) return "security";
+  if (s2?.startsWith("You are an interactive agent")) return "main";
+  if (s2?.startsWith("You are an agent for Claude Code")) return "agent";
+  return "other";
+}
+
+const SESSION_CHIPS: Record<Exclude<SessionKind, "main">, { label: string; className: string }> = {
+  agent: {
+    label: "Agent",
+    className: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  },
+  security: {
+    label: "Security",
+    className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  },
+  other: {
+    label: "Other",
+    className: "bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-slate-200",
+  },
+};
 
 function isStreamRequest(body: any): boolean {
   return body?.stream === true;
@@ -388,11 +430,16 @@ export default function RequestsForSession() {
               >
                 <div className="flex items-start justify-between mb-1">
                   <div className="flex-1 min-w-0 mr-4 flex items-center space-x-3">
-                    {isAgentSession(req.body) && (
-                      <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
-                        Agent
-                      </span>
-                    )}
+                    {(() => {
+                      const kind = classifySession(req.body);
+                      if (kind === "main") return null;
+                      const chip = SESSION_CHIPS[kind];
+                      return (
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${chip.className}`}>
+                          {chip.label}
+                        </span>
+                      );
+                    })()}
                     <h3 className="text-sm font-medium">
                       {modelBadge(model)}
                     </h3>
