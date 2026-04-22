@@ -35,4 +35,6 @@ Other
 
 - 기존 Agent chip 표시 자리에 Main session은 표시없고 나머지는 chip으로 표시
 
+## 구현 완료
 
+- 간단해서 IMPLEMENTATION_PLAN 생성없이 바로 구현
