@@ -38,6 +38,7 @@ interface LoaderData {
   total: number;
   sessionIdToken: string;
   modelFilter: string;
+  projectFilter: string | null;
 }
 
 const UNKNOWN_TOKEN = "unknown";
@@ -46,6 +47,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const sessionIdToken = params.sessionId ?? "";
   const url = new URL(request.url);
   const modelFilter = url.searchParams.get("model") ?? "all";
+  const projectFilter = url.searchParams.get("project");
 
   const backendUrl = new URL("http://localhost:3001/api/requests");
   backendUrl.searchParams.set("sessionId", sessionIdToken);
@@ -80,6 +82,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     total,
     sessionIdToken,
     modelFilter,
+    projectFilter,
   });
 }
 

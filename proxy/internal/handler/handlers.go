@@ -27,11 +27,12 @@ type Handler struct {
 	storageService      service.StorageService
 	conversationService service.ConversationService
 	modelRouter         *service.ModelRouter
+	sessionIndex        service.SessionIndex
 	logger              *log.Logger
 	sanitizeHeaders     bool
 }
 
-func New(anthropicService service.AnthropicService, storageService service.StorageService, logger *log.Logger, modelRouter *service.ModelRouter, sanitizeHeaders bool) *Handler {
+func New(anthropicService service.AnthropicService, storageService service.StorageService, logger *log.Logger, modelRouter *service.ModelRouter, sanitizeHeaders bool, sessionIndex service.SessionIndex) *Handler {
 	conversationService := service.NewConversationService()
 
 	return &Handler{
@@ -39,6 +40,7 @@ func New(anthropicService service.AnthropicService, storageService service.Stora
 		storageService:      storageService,
 		conversationService: conversationService,
 		modelRouter:         modelRouter,
+		sessionIndex:        sessionIndex,
 		logger:              logger,
 		sanitizeHeaders:     sanitizeHeaders,
 	}
@@ -376,10 +378,14 @@ func (h *Handler) NotFound(w http.ResponseWriter, r *http.Request) {
 // sessionResponse mirrors service.SessionSummary but uses RFC3339 string
 // timestamps so the wire format matches RequestLog.Timestamp.
 type sessionResponse struct {
-	SessionID      string `json:"sessionId"`
-	FirstTimestamp string `json:"firstTimestamp"`
-	LastTimestamp  string `json:"lastTimestamp"`
-	RequestCount   int    `json:"requestCount"`
+	SessionID          string `json:"sessionId"`
+	FirstTimestamp     string `json:"firstTimestamp"`
+	LastTimestamp      string `json:"lastTimestamp"`
+	RequestCount       int    `json:"requestCount"`
+	ProjectPath        string `json:"projectPath"`
+	ProjectDisplayName string `json:"projectDisplayName"`
+	Title              string `json:"title"`
+	HasConversation    bool   `json:"hasConversation"`
 }
 
 func (h *Handler) GetSessions(w http.ResponseWriter, r *http.Request) {
@@ -392,12 +398,25 @@ func (h *Handler) GetSessions(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]sessionResponse, 0, len(summaries))
 	for _, s := range summaries {
-		out = append(out, sessionResponse{
+		sr := sessionResponse{
 			SessionID:      s.SessionID,
 			FirstTimestamp: s.FirstTimestamp.Format(time.RFC3339),
 			LastTimestamp:  s.LastTimestamp.Format(time.RFC3339),
 			RequestCount:   s.RequestCount,
-		})
+		}
+
+		// Enrich with project/title from the session index.
+		// Unknown bucket (empty sessionID) never has a conversation entry.
+		if s.SessionID != "" && h.sessionIndex != nil {
+			if entry, found := h.sessionIndex.Lookup(s.SessionID); found {
+				sr.ProjectPath = entry.ProjectPath
+				sr.ProjectDisplayName = entry.DisplayName
+				sr.Title = entry.Title
+				sr.HasConversation = true
+			}
+		}
+
+		out = append(out, sr)
 	}
 
 	writeJSONResponse(w, out)

@@ -10,10 +10,14 @@ import (
 // SessionSummary is a compact aggregate view of requests grouped by session_id.
 // SessionID == "" represents the "Unknown" (header missing / empty) bucket.
 type SessionSummary struct {
-	SessionID      string    `json:"sessionId"`
-	FirstTimestamp time.Time `json:"firstTimestamp"`
-	LastTimestamp  time.Time `json:"lastTimestamp"`
-	RequestCount   int       `json:"requestCount"`
+	SessionID          string    `json:"sessionId"`
+	FirstTimestamp     time.Time `json:"firstTimestamp"`
+	LastTimestamp      time.Time `json:"lastTimestamp"`
+	RequestCount       int       `json:"requestCount"`
+	ProjectPath        string    `json:"projectPath"`
+	ProjectDisplayName string    `json:"projectDisplayName"`
+	Title              string    `json:"title"`
+	HasConversation    bool      `json:"hasConversation"`
 }
 
 type StorageService interface {

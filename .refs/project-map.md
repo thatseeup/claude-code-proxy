@@ -1,5 +1,5 @@
 # Project Map
-_생성: 2026-04-19 | 대상 커밋: 02c9c76_
+_생성: 2026-04-19 | 갱신: 2026-04-22 | 대상 커밋: c8a7389_
 
 ## 개요
 Claude Code 용 LLM 프록시 + 모니터링 대시보드.
@@ -29,11 +29,11 @@ claude-code-proxy/
     go.mod                    — Go 1.20, deps: gorilla/mux,handlers, joho/godotenv, mattn/go-sqlite3, yaml.v3
     go.sum
     proxy                     — Go 빌드 바이너리 (커밋됨 — 빌드 산출물)
-    cmd/proxy/main.go         — 엔트리포인트, 라우터 구성, 서버 lifecycle
+    cmd/proxy/main.go         — 엔트리포인트, 라우터 구성, 서버 lifecycle. HTTP listen 이전에 `SessionIndex.Rebuild()` 블로킹 호출; HTTP 서버 goroutine 기동 직후 `go idx.Watch(watchCtx)` 시작; shutdown 시 `watchCancel()` → `srv.Shutdown()` 순서
     internal/
       config/config.go        — YAML+ENV 설정 로더, Config 구조체, 기본값
       handler/
-        handlers.go           — HTTP 핸들러: Messages, Models, Health, UI, GetRequests, Conversations
+        handlers.go           — HTTP 핸들러: Messages, Models, Health, UI, GetRequests, Conversations, GetSessions(SessionIndex 조회로 projectPath/projectDisplayName/title/hasConversation 필드 채움). `handler.New(... , sessionIndex service.SessionIndex)` — 마지막 인자로 SessionIndex 주입
         utils.go              — SanitizeHeaders (민감 헤더 SHA256), ConversationDiffAnalyzer
       middleware/logging.go   — 요청 로깅 + 요청 바디를 context.BodyBytesKey 에 저장
       model/models.go         — 모든 DTO (RequestLog, ResponseLog, AnthropicRequest/Response, Tool, StreamingEvent, ContextKey)
@@ -43,10 +43,13 @@ claude-code-proxy/
         openai.go             — Anthropic→OpenAI 요청 변환, OpenAI→Anthropic 응답/스트림 변환
       service/
         anthropic.go          — (레거시) AnthropicService, 직접 /v1/messages 포워딩
-        conversation.go       — ~/.claude/projects/*.jsonl 파싱 (Claude Code 대화 기록) + `GetProjects()` 프로젝트 요약 (mtime DESC). `decodeProjectPath` 가 encoded CWD(`-Users-...-claude-code-proxy`) 를 파일 시스템 stat 으로 점층 복원 → `projectDisplayName` 이 실제 폴더 이름(`claude-code-proxy`) 또는 미확인 remainder 반환
+        conversation.go       — ~/.claude/projects/*.jsonl 파싱 (Claude Code 대화 기록) + `GetProjects()` 프로젝트 요약 (mtime DESC). `decodeProjectPath` 가 encoded CWD(`-Users-...-claude-code-proxy`) 를 파일 시스템 stat 으로 점층 복원 → `projectDisplayName` 이 실제 폴더 이름(`claude-code-proxy`) 또는 미확인 remainder 반환. `extractSessionTitle(filePath)` — title 전용 경량 스캐너 (ai-title/custom-title 라인만 읽어 마지막 값 반환, messages 전체 파싱 불필요)
+        conversation_test.go  — `extractSessionTitle` + `projectDisplayName` 단위 테스트
         model_router.go       — 모델 prefix 매칭 + subagent 해시 매칭 라우팅 결정
         model_router_test.go  — 라우터 edge case 테스트
-        storage.go            — StorageService 인터페이스 정의 (`GetRequestsBySessionID`, `GetSessionSummaries`, `DeleteRequestsBySessionID` 포함), SessionSummary 타입
+        session_index.go      — `SessionIndex` 인터페이스 (`Lookup`, `Rebuild`, `Watch`) + `sessionIndexImpl` 구현체. `NewSessionIndex(rootDir, logger)` 생성자. Rebuild: rootDir 하위 jsonl 전체 스캔 → `map[sessionID]SessionIndexEntry` 원자 교체. Watch: fsnotify 1차 시도 + 실패 시 10s 폴링 폴백. 서브디렉토리마다 watcher.Add 호출(fsnotify 재귀 미지원). `newSessionIndexWithPollInterval` 은 테스트용 패키지-프라이빗 생성자
+        session_index_test.go — `TestSessionIndex*` + `TestSessionIndexWatch*` 단위/동시성/감시 테스트
+        storage.go            — StorageService 인터페이스 정의 (`GetRequestsBySessionID`, `GetSessionSummaries`, `DeleteRequestsBySessionID` 포함), SessionSummary 타입 (`projectPath`, `projectDisplayName`, `title`, `hasConversation` 필드 포함 — 스토리지 레이어는 채우지 않고 핸들러가 SessionIndex 로 채움)
         storage_sqlite.go     — SQLite 구현체, requests 테이블 스키마 정의 (`session_id` 컬럼 + `idx_session_id` 포함)
 
   web/                        — Remix 프론트엔드 (Node >= 20, Vite 6)
@@ -61,9 +64,9 @@ claude-code-proxy/
       routes/
         _index.tsx                     — `/` → `/requests` redirect only
         requests.tsx                   — `/requests` parent layout: TopNav + 전체 폭(`<Outlet/>`) 본문. 사이드바 컬럼 없음. loader 가 `/api/sessions` 조회 후 pathname === "/requests" 이면 최근 세션으로 redirect. `SessionSummary` 타입은 `SessionPicker` 에서 re-export
-        requests.$sessionId.tsx        — `/requests/:sessionId` 좌측 목록 + 우측 상세의 2컬럼 화면 (HorizontalSplit 기반). 좌측 패널 상단에 SessionPicker(세션 전환 + 삭제) + 모델 필터 토글. `sessionId === "unknown"` → Unknown 버킷. 선택된 요청은 `?rid=`, 모델 필터는 `?model=` 쿼리. parent sessions 는 `useRouteLoaderData("routes/requests")` 로 접근
+        requests.$sessionId.tsx        — `/requests/:sessionId` 좌측 목록 + 우측 상세의 2컬럼 화면 (HorizontalSplit 기반). 좌측 패널 상단에 SessionPicker(세션 전환 + 삭제 + Conversations 바로가기) + 모델 필터 토글. `sessionId === "unknown"` → Unknown 버킷. 선택된 요청은 `?rid=`, 모델 필터는 `?model=` 쿼리. parent sessions 는 `useRouteLoaderData("routes/requests")` 로 접근
         conversations.tsx              — `/conversations` parent layout: TopNav + 전체 폭(`<Outlet/>`) 본문. 사이드바 컬럼 없음. loader 가 `/api/projects` 조회 후 pathname === "/conversations" 이면 최근 프로젝트로 redirect. `ProjectSummary` 타입은 `ProjectPicker` 에서 re-export
-        conversations.$projectId.tsx   — `/conversations/:projectId` 좌측 목록 + 우측 상세의 2컬럼 화면 (HorizontalSplit 기반). 좌측 패널 상단에 ProjectPicker(프로젝트 전환, 삭제 없음). 선택된 대화는 `?sid=` 쿼리. 프로젝트 전환 시 `?sid=` 제거. parent projects 는 `useRouteLoaderData("routes/conversations")` 로 접근
+        conversations.$projectId.tsx   — `/conversations/:projectId` 좌측 목록 + 우측 상세의 2컬럼 화면 (HorizontalSplit 기반). 좌측 패널 상단에 ProjectPicker(프로젝트 전환, 삭제 없음). 선택된 대화는 `?sid=` 쿼리. 프로젝트 전환 시 `?sid=` 제거. parent projects 는 `useRouteLoaderData("routes/conversations")` 로 접근. loader 가 `/api/conversations/project` + `/api/sessions` 를 `Promise.all` 로 병렬 조회해 `existingRequestSessionIds: string[]` 를 LoaderData 에 포함. 좌측 대화 카드 title 우측 + 우측 상세 헤더에 `SquareTerminal` 아이콘 버튼 (Requests 바로가기). `existingRequestSessions Set<string>` 으로 O(1) 조회 — 미존재 세션은 disabled
         api.requests.tsx               — /api/requests GET/DELETE — backend 3001 프록시 (신규 UI 는 loader 에서 직접 백엔드 호출, 이 프록시는 현재 미사용)
         api.conversations.tsx          — /api/conversations GET — backend 3001 프록시 (신규 UI 는 loader 에서 직접 백엔드 호출)
         api.sessions.tsx               — /api/sessions GET — 세션 요약 프록시
@@ -72,7 +75,7 @@ claude-code-proxy/
         api.grade-prompt.tsx           — /api/grade-prompt POST — backend 3001 프록시 (현재 backend 엔드포인트 없음)
       components/
         TopNav.tsx               — 상단 Requests / Conversations NavLink
-        SessionPicker.tsx        — `/requests/:sid` 좌측 패널 상단에 탑재되는 현재 세션 라벨 + 드롭다운 전환 + 휴지통(fetcher DELETE → `/api/sessions/:id`). 삭제 성공 시 `/requests` 로 navigate. `SessionSummary` 타입 export
+        SessionPicker.tsx        — `/requests/:sid` 좌측 패널 상단에 탑재되는 현재 세션 라벨 + 드롭다운 전환 + Conversations 바로가기(`MessageSquareText`) + 휴지통(fetcher DELETE → `/api/sessions/:id`). 삭제 성공 시 `/requests` 로 navigate. `SessionSummary` 타입 export (옵션 필드: `projectPath?`, `projectDisplayName?`, `title?`, `hasConversation?`). 현재 세션 라벨과 드롭다운 각 항목에 프로젝트 이름 + 타이틀 두 줄 표시; `hasConversation=false` 이면 "Project Not Found" 로 표기. Conversations 바로가기 버튼은 `hasConversation=false` 시 disabled + tooltip
         ProjectPicker.tsx        — `/conversations/:pid` 좌측 패널 상단에 탑재되는 현재 프로젝트 라벨 + 드롭다운 전환(삭제 없음 — jsonl 보호). 전환 시 `?sid=` 쿼리 제거. `ProjectSummary` 타입 export
         HorizontalSplit.tsx      — 좌/우 드래그 splitter 2단 레이아웃. 좌측 폭 `defaultLeftWidth`(기본 420px, min 240, max 800) 내부 state, 영속화 없음 — 매 마운트 디폴트로 리셋. mousemove/mouseup 리스너는 mouseup 에서 제거 + unmount cleanup 으로 body `userSelect/cursor` 복원
         RequestDetailContent.tsx — 요청/응답 상세 뷰 컨테이너
@@ -123,11 +126,12 @@ Claude Code client
 
 ### 의존 그래프
 ```
-main.go → config, provider, service (ModelRouter, AnthropicService, SQLiteStorage), handler, middleware
+main.go → config, provider, service (ModelRouter, AnthropicService, SQLiteStorage, SessionIndex), handler, middleware
 handler → service, model
 service.ModelRouter → config, model, provider
 provider.OpenAIProvider → model (AnthropicRequest 파싱)
 service.SQLiteStorage → model, config
+service.SessionIndex → service.conversation (extractSessionTitle, projectDisplayName), fsnotify
 ```
 
 ### 서비스 포트
@@ -164,7 +168,7 @@ CREATE TABLE requests (
 ### Backend API 엔드포인트 (cmd/proxy/main.go)
 - `POST /v1/messages` — Claude Code 프록시 본체
 - `GET /api/requests` — 요청 목록 (쿼리: `model`, `sessionId`, `page`, `limit`). `sessionId=unknown` → Unknown 버킷
-- `GET /api/sessions` — 세션 요약 `[{sessionId, firstTimestamp, lastTimestamp, requestCount}]` (lastTimestamp DESC)
+- `GET /api/sessions` — 세션 요약 `[{sessionId, firstTimestamp, lastTimestamp, requestCount, projectPath, projectDisplayName, title, hasConversation}]` (lastTimestamp DESC). 핸들러가 `SessionIndex.Lookup` 으로 프로젝트 정보를 채움; 매칭 없으면 빈 값 + `hasConversation=false`. Unknown 버킷(빈 sessionId)은 항상 `hasConversation=false`
 - `DELETE /api/sessions/{id}` — 세션 단위 삭제. `id=unknown` 이면 Unknown 버킷 삭제
 - `GET /api/projects` — Claude Code 프로젝트 요약 `[{projectPath, displayName, lastMTime, conversationCount}]` (lastMTime DESC)
 - `GET /api/conversations/project?project=<path>` — 특정 프로젝트의 대화 목록 (mux 등록 순서 중요: `/project` 를 `{id}` 보다 먼저)
@@ -186,6 +190,7 @@ CREATE TABLE requests (
 - 각 라인: `ConversationMessage { parentUuid, isSidechain, userType, cwd, sessionId, version, type, message(raw), uuid, timestamp }`
 - 버퍼 크기: 10MB per line
 - `type == "ai-title" | "custom-title"` 라인은 세션 타이틀 이벤트 — `parseConversationFile` 가 `extractTitleFromLine` 으로 추출해 `Conversation.Title` 에 마지막 등장값을 저장(파일 라인 순서 기준)하고 `messages` 에서 제외. 필드 우선순위: `customTitle` → `aiTitle`. UI(`conversations.$projectId.tsx`)는 `title` 우선, 없으면 `firstUserText` 폴백
+- `extractSessionTitle(filePath string) (string, error)` — title 전용 경량 스캐너. 파일 전체를 순회하되 `type` 필드가 `ai-title` / `custom-title` 인 라인에서만 `extractTitleFromLine` 호출 → 마지막 등장값 반환. `SessionIndex.Rebuild` / 파일 upsert 시 사용
 
 ### Subagent 라우팅 구조 (model_router.go)
 - `SubagentDefinition { Name, TargetModel, TargetProvider, FullPrompt }`
@@ -234,6 +239,7 @@ CREATE TABLE requests (
 - `github.com/joho/godotenv ^1.5` — .env 로더
 - `github.com/mattn/go-sqlite3 ^1.14` — SQLite 드라이버 (CGO 필요)
 - `gopkg.in/yaml.v3 ^3.0` — config.yaml 파싱
+- `github.com/fsnotify/fsnotify v1.9.0` — OS 파일시스템 이벤트 감시 (`SessionIndex.Watch`). fsnotify 는 재귀 감시 미지원으로 프로젝트 서브디렉토리마다 `watcher.Add` 필요
 - `github.com/felixge/httpsnoop ^1.0.3` (indirect)
 
 ### Node (web/package.json, Node >= 20)
@@ -288,6 +294,8 @@ CREATE TABLE requests (
 | Dockerfile CGO_ENABLED=1 | go-sqlite3 는 CGO 필수. 0 으로 바꾸면 빌드 실패 |
 | `api.grade-prompt.tsx` | Remix 쪽은 존재하나 Go 백엔드에 `/api/grade-prompt` 라우트 미등록 (main.go). 사용 시 404 — 백엔드 추가 필요 |
 | `~/.claude/projects/*.jsonl` 파싱 위치 | `NewConversationService()` 가 `os.UserHomeDir()` 사용 — Docker 내부에서는 경로 다름, 컨테이너에서는 conversation 기능 무효 |
+| `SessionIndex` 초기 `Rebuild` 순서 | `main.go` 에서 `idx.Rebuild()` 를 HTTP `ListenAndServe` 이전에 블로킹으로 호출 — 재배치 시 인덱스 없이 요청이 들어와 `hasConversation` 이 항상 false 가 됨 |
+| `SessionIndex.Watch` 서브디렉토리 watcher.Add | fsnotify 는 재귀 감시 미지원. `Rebuild` 후 각 프로젝트 서브디렉토리를 `watcher.Add` 해야 jsonl 변경 이벤트 수신 가능. 신규 프로젝트 디렉토리는 `Create` 이벤트에서 `watcher.Add` 로 동적 추가 |
 | `decodeProjectPath` / `projectDisplayName` (conversation.go) | encoded CWD 를 파일 시스템 stat 으로 복원 — 세그먼트 단위 lookahead 로 하이픈 포함 폴더명(`claude-code-proxy`) 을 정확히 복원. 디스크에 프로젝트가 없으면 remainder 그대로 반환. `GetProjects` 호출마다 stat 발생(캐시 없음), stub `existsFn` 주입 가능(`projectDisplayNameWith`) |
 | `HorizontalSplit.tsx` mousemove/mouseup 리스너 정리 | `onMouseDown` 이 `window` 레벨 리스너 등록 → `onUp` 에서 반드시 제거 + 언마운트 cleanup 으로 body `userSelect/cursor` 복원. 누락 시 드래그 종료 후에도 커서가 `col-resize` 에 고정 / 메모리 누수 |
 | Split 상태 영속화 금지 | 요구사항상 localStorage/쿠키/서버 저장 없이 매 세션 디폴트로 복귀. `HorizontalSplit` 는 `defaultLeftWidth=420` 로 마운트 시 리셋 — 변경 시 UX 회귀 주의 |

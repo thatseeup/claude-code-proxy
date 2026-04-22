@@ -1,6 +1,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -192,4 +194,125 @@ func TestProjectDisplayName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// writeTempJSONL writes lines to a temporary .jsonl file and returns its path.
+func writeTempJSONL(t *testing.T, dir, name string, lines []string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	content := ""
+	for _, l := range lines {
+		content += l + "\n"
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writeTempJSONL: %v", err)
+	}
+	return path
+}
+
+func TestExtractSessionTitle(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("ai-title only returns aiTitle", func(t *testing.T) {
+		path := writeTempJSONL(t, dir, "ai-only.jsonl", []string{
+			`{"type":"summary","message":{"role":"user","content":"hello"}}`,
+			`{"type":"ai-title","aiTitle":"My AI Title","customTitle":""}`,
+		})
+		got, err := extractSessionTitle(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "My AI Title" {
+			t.Errorf("got %q, want %q", got, "My AI Title")
+		}
+	})
+
+	t.Run("custom-title takes priority over ai-title on same line", func(t *testing.T) {
+		path := writeTempJSONL(t, dir, "custom-priority.jsonl", []string{
+			`{"type":"custom-title","aiTitle":"AI Title","customTitle":"Custom Title"}`,
+		})
+		got, err := extractSessionTitle(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "Custom Title" {
+			t.Errorf("got %q, want %q", got, "Custom Title")
+		}
+	})
+
+	t.Run("ai-title fallback when customTitle is empty", func(t *testing.T) {
+		path := writeTempJSONL(t, dir, "ai-fallback.jsonl", []string{
+			`{"type":"ai-title","aiTitle":"Fallback Title","customTitle":""}`,
+		})
+		got, err := extractSessionTitle(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "Fallback Title" {
+			t.Errorf("got %q, want %q", got, "Fallback Title")
+		}
+	})
+
+	t.Run("no title lines returns empty string", func(t *testing.T) {
+		path := writeTempJSONL(t, dir, "no-title.jsonl", []string{
+			`{"type":"summary","message":{"role":"user","content":"hello"}}`,
+			`{"type":"summary","message":{"role":"assistant","content":"world"}}`,
+		})
+		got, err := extractSessionTitle(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("got %q, want empty string", got)
+		}
+	})
+
+	t.Run("multiple title lines — last one wins", func(t *testing.T) {
+		path := writeTempJSONL(t, dir, "multi-title.jsonl", []string{
+			`{"type":"ai-title","aiTitle":"First Title","customTitle":""}`,
+			`{"type":"summary","message":{"role":"user","content":"hello"}}`,
+			`{"type":"ai-title","aiTitle":"Second Title","customTitle":""}`,
+			`{"type":"custom-title","aiTitle":"","customTitle":"Third Title"}`,
+		})
+		got, err := extractSessionTitle(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "Third Title" {
+			t.Errorf("got %q, want %q", got, "Third Title")
+		}
+	})
+
+	t.Run("file does not exist returns error", func(t *testing.T) {
+		_, err := extractSessionTitle(filepath.Join(dir, "nonexistent.jsonl"))
+		if err == nil {
+			t.Error("expected error for missing file, got nil")
+		}
+	})
+
+	t.Run("malformed lines are skipped gracefully", func(t *testing.T) {
+		path := writeTempJSONL(t, dir, "malformed.jsonl", []string{
+			`not valid json at all`,
+			`{"type":"ai-title","aiTitle":"Good Title","customTitle":""}`,
+			`{broken`,
+		})
+		got, err := extractSessionTitle(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "Good Title" {
+			t.Errorf("got %q, want %q", got, "Good Title")
+		}
+	})
+
+	t.Run("empty file returns empty string", func(t *testing.T) {
+		path := writeTempJSONL(t, dir, "empty.jsonl", []string{})
+		got, err := extractSessionTitle(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("got %q, want empty string", got)
+		}
+	})
 }

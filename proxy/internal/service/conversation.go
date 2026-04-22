@@ -521,3 +521,54 @@ func extractTitleFromLine(line []byte) string {
 	}
 	return raw.AITitle
 }
+
+// extractSessionTitle scans a JSONL conversation file for ai-title and
+// custom-title lines and returns the last title found (the latest occurrence
+// wins, preserving the same precedence as parseConversationFile). Only title
+// lines are read — conversational messages are skipped — so this function is
+// significantly cheaper than a full parse.
+//
+// Returns ("", nil) when the file contains no title lines. Returns a non-nil
+// error only for OS-level failures (file not found, permission denied, scanner
+// overflow). Malformed individual lines are silently skipped.
+func extractSessionTitle(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("extractSessionTitle: open %s: %w", filePath, err)
+	}
+	defer file.Close()
+
+	const maxScanTokenSize = 10 * 1024 * 1024 // 10 MB — same as parseConversationFile
+	buf := make([]byte, maxScanTokenSize)
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(buf, maxScanTokenSize)
+
+	var title string
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		// Quick type-field check before full unmarshal for performance.
+		var typeOnly struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(line, &typeOnly); err != nil {
+			continue
+		}
+		if typeOnly.Type != "ai-title" && typeOnly.Type != "custom-title" {
+			continue
+		}
+
+		if t := extractTitleFromLine(line); t != "" {
+			title = t
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("extractSessionTitle: scan %s: %w", filePath, err)
+	}
+
+	return title, nil
+}

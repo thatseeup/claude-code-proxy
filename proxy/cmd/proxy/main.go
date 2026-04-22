@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -45,11 +46,20 @@ func main() {
 	}
 	logger.Println("🗿 SQLite database ready")
 
+	// Build the session index (maps sessionID → project/title) before HTTP
+	// listen so the first request can already benefit from the mapping.
+	homeDir, _ := os.UserHomeDir()
+	sessionIndexRootDir := filepath.Join(homeDir, ".claude", "projects")
+	sessionIdx := service.NewSessionIndex(sessionIndexRootDir, logger)
+	if err := sessionIdx.Rebuild(); err != nil {
+		logger.Fatalf("❌ Failed to build session index: %v", err)
+	}
+
 	sanitizeHeaders := cfg.ShouldSanitizeHeaders()
 	if !sanitizeHeaders {
 		logger.Println("⚠️  security.sanitize_headers=false — request logs will store original Authorization/API-key headers in plaintext")
 	}
-	h := handler.New(anthropicService, storageService, logger, modelRouter, sanitizeHeaders)
+	h := handler.New(anthropicService, storageService, logger, modelRouter, sanitizeHeaders, sessionIdx)
 
 	r := mux.NewRouter()
 
@@ -103,11 +113,22 @@ func main() {
 		}
 	}()
 
+	// Start the session-index watcher after the HTTP server is up.
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	go func() {
+		if err := sessionIdx.Watch(watchCtx); err != nil && err != context.Canceled {
+			logger.Printf("⚠️  session-index watcher exited: %v", err)
+		}
+	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	logger.Println("🛑 Shutting down server...")
+
+	// Stop the session-index watcher before shutting down the HTTP server.
+	watchCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

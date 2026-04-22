@@ -3,11 +3,12 @@ import { json } from "@remix-run/node";
 import {
   Link,
   useLoaderData,
+  useNavigate,
   useParams,
   useRouteLoaderData,
   useSearchParams,
 } from "@remix-run/react";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, SquareTerminal } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { ConversationThread } from "../components/ConversationThread";
@@ -42,27 +43,48 @@ interface Conversation {
 interface LoaderData {
   conversations: Conversation[];
   projectPath: string;
+  existingRequestSessionIds: string[];
 }
 
 export async function loader({ params }: LoaderFunctionArgs) {
   const projectPath = decodeURIComponent(params.projectId ?? "");
 
-  let conversations: Conversation[] = [];
-  try {
-    const backendUrl = new URL(
-      "http://localhost:3001/api/conversations/project"
-    );
-    backendUrl.searchParams.set("project", projectPath);
-    const res = await fetch(backendUrl.toString());
-    if (res.ok) {
-      const data = (await res.json()) as Conversation[] | null;
-      conversations = data ?? [];
+  const conversationsPromise = (async (): Promise<Conversation[]> => {
+    try {
+      const backendUrl = new URL(
+        "http://localhost:3001/api/conversations/project"
+      );
+      backendUrl.searchParams.set("project", projectPath);
+      const res = await fetch(backendUrl.toString());
+      if (res.ok) {
+        const data = (await res.json()) as Conversation[] | null;
+        return data ?? [];
+      }
+    } catch (err) {
+      console.error("Failed to load project conversations:", err);
     }
-  } catch (err) {
-    console.error("Failed to load project conversations:", err);
-  }
+    return [];
+  })();
 
-  return json<LoaderData>({ conversations, projectPath });
+  const requestSessionIdsPromise = (async (): Promise<string[]> => {
+    try {
+      const res = await fetch("http://localhost:3001/api/sessions");
+      if (res.ok) {
+        const data = (await res.json()) as Array<{ sessionId: string }> | null;
+        return (data ?? []).map((s) => s.sessionId).filter(Boolean);
+      }
+    } catch (err) {
+      console.error("Failed to load sessions:", err);
+    }
+    return [];
+  })();
+
+  const [conversations, existingRequestSessionIds] = await Promise.all([
+    conversationsPromise,
+    requestSessionIdsPromise,
+  ]);
+
+  return json<LoaderData>({ conversations, projectPath, existingRequestSessionIds });
 }
 
 function formatTime(iso: string): string {
@@ -118,14 +140,16 @@ function extractText(parsed: any): string {
 }
 
 export default function ConversationsForProject() {
-  const { conversations, projectPath } = useLoaderData<typeof loader>();
+  const { conversations, projectPath, existingRequestSessionIds } = useLoaderData<typeof loader>();
   const parentData = useRouteLoaderData("routes/conversations") as
     | { projects: ProjectSummary[] }
     | undefined;
   const projects = parentData?.projects ?? [];
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const sid = searchParams.get("sid") ?? "";
+  const existingRequestSessions = new Set(existingRequestSessionIds);
 
   const selected =
     conversations.find((c) => c.sessionId === sid) ??
@@ -204,6 +228,7 @@ export default function ConversationsForProject() {
             const subline = conv.sessionId.slice(0, 8);
             const nextParams = new URLSearchParams(searchParams);
             nextParams.set("sid", conv.sessionId);
+            const hasRequest = existingRequestSessions.has(conv.sessionId);
             return (
               <Link
                 key={conv.sessionId}
@@ -225,11 +250,29 @@ export default function ConversationsForProject() {
                 }`}
               >
                 <div className="min-w-0">
-                  <div
-                    className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate mb-1"
-                    title={headline}
-                  >
-                    {headline}
+                  <div className="flex items-start justify-between gap-1 mb-1">
+                    <div
+                      className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate min-w-0"
+                      title={headline}
+                    >
+                      {headline}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!hasRequest}
+                      title={hasRequest ? "Go to Requests" : "No matching request session"}
+                      aria-label="Go to Requests"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (hasRequest) {
+                          navigate(`/requests/${encodeURIComponent(conv.sessionId)}`);
+                        }
+                      }}
+                      className="shrink-0 p-0.5 rounded text-gray-400 dark:text-gray-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:text-orange-400 dark:hover:bg-orange-900/30 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                    >
+                      <SquareTerminal className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                     <span className="font-mono">{subline}</span>
@@ -250,6 +293,10 @@ export default function ConversationsForProject() {
     </div>
   );
 
+  const selectedHasRequest = selected
+    ? existingRequestSessions.has(selected.sessionId)
+    : false;
+
   const detailPane = selected ? (
     <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg h-full flex flex-col ml-2">
       <div className="bg-gray-50 dark:bg-slate-800 px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between gap-4 shrink-0">
@@ -261,9 +308,25 @@ export default function ConversationsForProject() {
             <span className="uppercase tracking-wider">Conversation</span>
           )}
         </h2>
-        <span className="text-xs font-mono text-gray-500 dark:text-gray-400 shrink-0">
-          {selected.sessionId}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            disabled={!selectedHasRequest}
+            title={selectedHasRequest ? "Go to Requests" : "No matching request session"}
+            aria-label="Go to Requests"
+            onClick={() => {
+              if (selectedHasRequest) {
+                navigate(`/requests/${encodeURIComponent(selected.sessionId)}`);
+              }
+            }}
+            className="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:text-orange-400 dark:hover:bg-orange-900/30 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+          >
+            <SquareTerminal className="w-4 h-4" />
+          </button>
+          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+            {selected.sessionId}
+          </span>
+        </div>
       </div>
       <div className="p-4 overflow-y-auto flex-1 min-h-0">
         <ConversationThread
