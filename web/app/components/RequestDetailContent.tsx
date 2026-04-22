@@ -1037,89 +1037,150 @@ function RequestOverviewTable({ request }: { readonly request: Request }) {
   const maxTokens = request.body?.max_tokens;
   const stream = request.body?.stream;
 
-  const rows: Array<{ label: string; value: React.ReactNode }> = [
+  const none = <span className="text-gray-400 italic">없음</span>;
+
+  const groups: OverviewGroup[] = [
     {
-      label: 'Timestamp',
-      value: <span className="text-gray-900">{formatStableDateTime(request.timestamp)}</span>,
+      rows: [
+        {
+          label: 'Timestamp',
+          value: <span className="text-gray-900">{formatStableDateTime(request.timestamp)}</span>,
+        },
+        {
+          label: 'Method/URL',
+          value: (
+            <code className="text-blue-700 bg-blue-50 px-2 py-1 rounded font-mono text-xs border border-blue-200 break-all">
+              {request.method} {getChatCompletionsEndpoint(request.routedModel, request.endpoint)}
+            </code>
+          ),
+        },
+      ],
     },
     {
-      label: 'Method/URL',
-      value: (
-        <code className="text-blue-700 bg-blue-50 px-2 py-1 rounded font-mono text-xs border border-blue-200 break-all">
-          {request.method} {getChatCompletionsEndpoint(request.routedModel, request.endpoint)}
-        </code>
-      ),
+      title: 'Header',
+      rows: [
+        {
+          label: 'User-Agent',
+          value: userAgent ? (
+            <span className="text-gray-700 text-xs break-all">{userAgent}</span>
+          ) : none,
+        },
+        {
+          label: 'Model',
+          value: model ? (
+            <span className="text-gray-900 font-mono text-xs break-all">{model}</span>
+          ) : none,
+        },
+      ],
     },
     {
-      label: 'Header.User-Agent',
-      value: userAgent ? (
-        <span className="text-gray-700 text-xs break-all">{userAgent}</span>
-      ) : (
-        <span className="text-gray-400 italic">없음</span>
-      ),
-    },
-    {
-      label: 'Header.Model',
-      value: model ? (
-        <span className="text-gray-900 font-mono text-xs break-all">{model}</span>
-      ) : (
-        <span className="text-gray-400 italic">없음</span>
-      ),
-    },
-    {
-      label: 'Body.system[0]',
-      value: system0 ? (
-        <span className="text-gray-800 whitespace-pre-wrap break-words text-xs">{system0}</span>
-      ) : (
-        <span className="text-gray-400 italic">없음</span>
-      ),
-    },
-    {
-      label: 'Body.system[1]',
-      value: system1 ? (
-        <span
-          className="text-gray-800 text-xs block truncate"
-          title={system1}
-        >
-          {system1}
-        </span>
-      ) : (
-        <span className="text-gray-400 italic">없음</span>
-      ),
-    },
-    {
-      label: 'Body.max_tokens',
-      value:
-        maxTokens !== undefined && maxTokens !== null ? (
-          <span className="text-gray-900">{maxTokens.toLocaleString()}</span>
-        ) : (
-          <span className="text-gray-400 italic">없음</span>
-        ),
-    },
-    {
-      label: 'Body.stream',
-      value:
-        stream === undefined || stream === null ? (
-          <span className="text-gray-400 italic">없음</span>
-        ) : (
-          <span className="text-gray-900">{String(stream)}</span>
-        ),
+      title: 'Body',
+      rows: [
+        {
+          label: 'system[0]',
+          value: system0 ? (
+            <span className="text-gray-800 whitespace-pre-wrap break-words text-xs">{system0}</span>
+          ) : none,
+        },
+        {
+          label: 'system[1]',
+          value: system1 ? (
+            <span className="text-gray-800 text-xs block truncate" title={system1}>
+              {system1}
+            </span>
+          ) : none,
+        },
+        {
+          label: 'max_tokens',
+          value:
+            maxTokens !== undefined && maxTokens !== null ? (
+              <span className="text-gray-900">{maxTokens.toLocaleString()}</span>
+            ) : none,
+        },
+        {
+          label: 'stream',
+          value:
+            stream === undefined || stream === null ? none : (
+              <span className="text-gray-900">{String(stream)}</span>
+            ),
+        },
+      ],
     },
   ];
 
+  return <OverviewTable groups={groups} labelWidthClass="w-[180px]" tableFixed />;
+}
+
+type OverviewRow = { label: string; value: React.ReactNode };
+type OverviewGroup = { title?: string; titleCase?: 'upper' | 'lower'; rows: OverviewRow[] };
+
+function OverviewTable({
+  groups,
+  labelWidthClass,
+  tableFixed,
+}: {
+  readonly groups: OverviewGroup[];
+  readonly labelWidthClass: string;
+  readonly tableFixed?: boolean;
+}) {
   return (
-    <table className="w-full table-fixed text-sm border border-gray-200 rounded-lg overflow-hidden">
+    <table
+      className={`w-full ${tableFixed ? 'table-fixed' : ''} text-sm border border-gray-200 rounded-lg overflow-hidden`}
+    >
       <tbody>
-        {rows.map((row) => (
-          <tr key={row.label} className="border-b border-gray-200 last:border-b-0 align-top">
-            <td className="bg-gray-50 text-gray-600 font-medium px-3 py-2 w-[180px] whitespace-nowrap">
+        {groups.map((group, gi) => (
+          <GroupSection
+            key={group.title ?? `g${gi}`}
+            group={group}
+            labelWidthClass={labelWidthClass}
+            isLast={gi === groups.length - 1}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function GroupSection({
+  group,
+  labelWidthClass,
+  isLast,
+}: {
+  readonly group: OverviewGroup;
+  readonly labelWidthClass: string;
+  readonly isLast: boolean;
+}) {
+  return (
+    <>
+      {group.title && (
+        <tr className="border-b border-gray-200 bg-gray-100">
+          <td
+            colSpan={2}
+            className={`px-3 py-0.5 text-[10px] font-semibold text-gray-600 tracking-wide leading-tight ${
+              group.titleCase === 'lower' ? '' : 'uppercase'
+            }`}
+          >
+            {group.title}
+          </td>
+        </tr>
+      )}
+      {group.rows.map((row, ri) => {
+        const isLastRow = isLast && ri === group.rows.length - 1;
+        return (
+          <tr
+            key={row.label}
+            className={`align-top ${isLastRow ? '' : 'border-b border-gray-200'}`}
+          >
+            <td
+              className={`bg-gray-50 text-gray-600 font-medium px-3 py-2 ${labelWidthClass} whitespace-nowrap`}
+            >
               {row.label}
             </td>
             <td className="px-3 py-2 overflow-hidden">{row.value}</td>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        );
+      })}
+    </>
   );
 }
 
@@ -1199,40 +1260,43 @@ function ResponseOverviewTable({ response }: { readonly response: NonNullable<Re
   const num = (v: number | undefined | null): React.ReactNode =>
     v === undefined || v === null ? none : <span className="text-gray-900">{Number(v).toLocaleString()}</span>;
 
-  const rows: Array<{ label: string; value: React.ReactNode }> = [
-    { label: 'Status', value: <span className="text-gray-900">{response.statusCode}</span> },
-    { label: 'Header.Content-Type', value: plainText(contentType) },
-    { label: 'Header.Request-Id', value: mono(requestId) },
+  const groups: OverviewGroup[] = [
+    {
+      rows: [
+        { label: 'Status', value: <span className="text-gray-900">{response.statusCode}</span> },
+      ],
+    },
+    {
+      title: 'Header',
+      rows: [
+        { label: 'Content-Type', value: plainText(contentType) },
+        { label: 'Request-Id', value: mono(requestId) },
+        ...(hasAnyRatelimit
+          ? [
+              { label: 'Ratelimit-5h', value: formatRatelimitRow(rl5hUtil, rl5hReset, rl5hStatus) },
+              { label: 'Ratelimit-7d', value: formatRatelimitRow(rl7dUtil, rl7dReset, rl7dStatus) },
+            ]
+          : []),
+      ],
+    },
+    {
+      title: 'Body',
+      rows: [
+        { label: 'id', value: mono(body?.id) },
+        { label: 'stop_reason', value: plainText(body?.stop_reason) },
+      ],
+    },
+    {
+      title: 'usage',
+      titleCase: 'lower',
+      rows: [
+        { label: 'cache_read_input_tokens', value: num(usage?.cache_read_input_tokens) },
+        { label: 'cache_creation_input_tokens', value: num(usage?.cache_creation_input_tokens) },
+        { label: 'input_tokens', value: num(usage?.input_tokens) },
+        { label: 'output_tokens', value: num(usage?.output_tokens) },
+      ],
+    },
   ];
 
-  if (hasAnyRatelimit) {
-    rows.push(
-      { label: 'Ratelimit-5h', value: formatRatelimitRow(rl5hUtil, rl5hReset, rl5hStatus) },
-      { label: 'Ratelimit-7d', value: formatRatelimitRow(rl7dUtil, rl7dReset, rl7dStatus) },
-    );
-  }
-
-  rows.push(
-    { label: 'Body.id', value: mono(body?.id) },
-    { label: 'Body.stop_reason', value: plainText(body?.stop_reason) },
-    { label: 'Body.usage.cache_read_input_tokens', value: num(usage?.cache_read_input_tokens) },
-    { label: 'Body.usage.cache_creation_input_tokens', value: num(usage?.cache_creation_input_tokens) },
-    { label: 'Body.usage.input_tokens', value: num(usage?.input_tokens) },
-    { label: 'Body.usage.output_tokens', value: num(usage?.output_tokens) },
-  );
-
-  return (
-    <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.label} className="border-b border-gray-200 last:border-b-0 align-top">
-            <td className="bg-gray-50 text-gray-600 font-medium px-3 py-2 w-[240px] whitespace-nowrap">
-              {row.label}
-            </td>
-            <td className="px-3 py-2">{row.value}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+  return <OverviewTable groups={groups} labelWidthClass="w-[240px]" />;
 }
