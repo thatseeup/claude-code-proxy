@@ -427,7 +427,7 @@ export default function RequestsForSession() {
                       <span
                         className={`px-1.5 py-0.5 rounded font-medium ${
                           req.response.body.stop_reason === "end_turn"
-                            ? "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                            ? "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300"
                             : "bg-slate-100 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500"
                         }`}
                       >
