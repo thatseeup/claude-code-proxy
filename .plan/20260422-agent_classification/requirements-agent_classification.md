@@ -11,6 +11,7 @@
 Agent
 - Body.system[1]가 'You are a Claude agent'로 시작
 - Body.system[2]가 'You are an agent for Claude Code'로 시작
+- Body.system[2]가 'You are a file search specialist for Claude Code'로 시작
 - 두 조건 중에 하나만 부합하면 된다.
 
 Security Monitor
@@ -29,7 +30,8 @@ Other
 2. system[1]이 'You are a security monitor'로 시작 → Security Monitor
 3. system[2]이 'You are an interactive agent'로 시작 → Main session
 4. system[2]가 'You are an agent for Claude Code'로 시작 → Agent
-5. 그 외 → Other
+5. system[2]가 'You are a file search specialist for Claude Code'로 시작 → Agent
+6. 그 외 → Other
 
 ## UI
 

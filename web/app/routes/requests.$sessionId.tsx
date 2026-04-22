@@ -162,6 +162,7 @@ function classifySession(body: unknown): SessionKind {
   if (s1?.startsWith("You are a security monitor")) return "security";
   if (s2?.startsWith("You are an interactive agent")) return "main";
   if (s2?.startsWith("You are an agent for Claude Code")) return "agent";
+  if (s2?.startsWith("You are a file search specialist for Claude Code")) return "agent";
   return "other";
 }
 
