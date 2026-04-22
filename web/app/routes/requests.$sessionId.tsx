@@ -290,10 +290,30 @@ function lastTwoMessages(body: unknown): LastMessageSummary[] {
   return result;
 }
 
-const ROLE_CHIP_CLASS =
+const ROLE_CHIP_CLASSES: Record<string, string> = {
+  user: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300",
+  assistant:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+};
+const ROLE_CHIP_FALLBACK =
   "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
-const TYPE_CHIP_CLASS =
+
+const TYPE_CHIP_CLASSES: Record<string, string> = {
+  tool_use:
+    "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+  tool_result:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+};
+const TYPE_CHIP_FALLBACK =
   "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+
+function roleChipClass(role: string): string {
+  return ROLE_CHIP_CLASSES[role] ?? ROLE_CHIP_FALLBACK;
+}
+
+function typeChipClass(type: string): string {
+  return TYPE_CHIP_CLASSES[type] ?? TYPE_CHIP_FALLBACK;
+}
 
 interface PreviewLine {
   chip: string;
@@ -306,7 +326,7 @@ function summaryToLines(summary: LastMessageSummary): PreviewLine[] {
   const lines: PreviewLine[] = [];
   lines.push({
     chip: summary.role,
-    chipClass: ROLE_CHIP_CLASS,
+    chipClass: roleChipClass(summary.role),
     value:
       summary.text !== undefined && summary.text !== ""
         ? `"${summary.text}"`
@@ -315,7 +335,7 @@ function summaryToLines(summary: LastMessageSummary): PreviewLine[] {
   if (summary.toolUseNames && summary.toolUseNames.length > 0) {
     lines.push({
       chip: "tool_use",
-      chipClass: TYPE_CHIP_CLASS,
+      chipClass: typeChipClass("tool_use"),
       value: summary.toolUseNames.join("|"),
       indent: true,
     });
@@ -323,7 +343,7 @@ function summaryToLines(summary: LastMessageSummary): PreviewLine[] {
   if (summary.toolResult !== undefined) {
     lines.push({
       chip: "tool_result",
-      chipClass: TYPE_CHIP_CLASS,
+      chipClass: typeChipClass("tool_result"),
       value: summary.toolResult ? `"${summary.toolResult}"` : undefined,
       indent: true,
     });
@@ -331,7 +351,7 @@ function summaryToLines(summary: LastMessageSummary): PreviewLine[] {
   if (summary.otherType !== undefined) {
     lines.push({
       chip: summary.otherType,
-      chipClass: TYPE_CHIP_CLASS,
+      chipClass: typeChipClass(summary.otherType),
       indent: true,
     });
   }
@@ -351,7 +371,7 @@ function LastMessagePreview({ body }: Readonly<{ body: unknown }>) {
   const lines: PreviewLine[] = summaries.flatMap(summaryToLines);
 
   return (
-    <div className="mb-2 space-y-0.5">
+    <div className="mb-2 pb-2 space-y-0.5 border-b border-gray-300 dark:border-slate-600">
       {lines.map((l) => (
         <div
           key={`${l.chip}-${l.value ?? ""}-${l.indent ? "i" : ""}`}
@@ -576,7 +596,7 @@ export default function RequestsForSession() {
           })}
         </div>
       </div>
-      <div className="divide-y divide-gray-200 dark:divide-slate-700 overflow-y-auto flex-1 min-h-0">
+      <div className="overflow-y-auto flex-1 min-h-0 space-y-2 p-2">
         {requests.length === 0 ? (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
             <h3 className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
@@ -605,10 +625,10 @@ export default function RequestsForSession() {
                   params.sessionId ?? ""
                 )}?${nextParams.toString()}`}
                 replace
-                className={`block px-4 py-3 transition-colors border-b border-gray-100 dark:border-slate-800 last:border-b-0 ${
+                className={`block px-4 py-3 rounded-md border transition-colors ${
                   isSelected
-                    ? "bg-blue-50 dark:bg-blue-900/30"
-                    : "hover:bg-gray-50 dark:hover:bg-slate-800"
+                    ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800"
+                    : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
                 }`}
               >
                 <LastMessagePreview body={req.body} />
