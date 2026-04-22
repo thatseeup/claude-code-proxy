@@ -291,14 +291,22 @@ func summarizeRequestBody(raw string) interface{} {
 		return nil
 	}
 	var parsed struct {
-		Stream bool              `json:"stream,omitempty"`
-		System []json.RawMessage `json:"system,omitempty"`
+		Stream   bool              `json:"stream,omitempty"`
+		System   []json.RawMessage `json:"system,omitempty"`
+		Messages []json.RawMessage `json:"messages,omitempty"`
 	}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
 		return nil
 	}
 	out := map[string]interface{}{
 		"stream": parsed.Stream,
+	}
+	if n := len(parsed.Messages); n > 0 {
+		start := n - 2
+		if start < 0 {
+			start = 0
+		}
+		out["messages"] = parsed.Messages[start:n]
 	}
 	// Keep the first three system entries so that classifySession on the client can
 	// inspect system[2] (which on this Claude Code build holds the "You are an interactive

@@ -192,6 +192,189 @@ function hitRatioChipClass(ratio: number): string {
   return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 }
 
+interface LastMessageSummary {
+  role: string;
+  text?: string;
+  toolUseNames?: string[];
+  toolResult?: string;
+  otherType?: string;
+}
+
+function stringifyToolResultContent(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const block of content) {
+      if (block && typeof block === "object") {
+        const b = block as { type?: unknown; text?: unknown };
+        if (b.type === "text" && typeof b.text === "string") {
+          parts.push(b.text);
+        } else if (typeof b.type === "string") {
+          parts.push(`[${b.type}]`);
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join(" ") : undefined;
+  }
+  if (content && typeof content === "object") {
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function summarizeMessage(msg: unknown): LastMessageSummary | null {
+  if (!msg || typeof msg !== "object") return null;
+  const m = msg as { role?: unknown; content?: unknown };
+  const role = typeof m.role === "string" ? m.role : "unknown";
+  const content = m.content;
+
+  const summary: LastMessageSummary = { role };
+
+  if (typeof content === "string") {
+    summary.text = content;
+    return summary;
+  }
+
+  if (!Array.isArray(content)) return summary;
+
+  let lastText: string | undefined;
+  const toolUseNames: string[] = [];
+  let lastToolResultContent: unknown;
+  let lastOtherType: string | undefined;
+
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as { type?: unknown; text?: unknown; name?: unknown; content?: unknown };
+    if (b.type === "text") {
+      if (typeof b.text === "string") lastText = b.text;
+    } else if (b.type === "tool_use") {
+      if (typeof b.name === "string") toolUseNames.push(b.name);
+    } else if (b.type === "tool_result") {
+      lastToolResultContent = b.content;
+    } else if (typeof b.type === "string") {
+      lastOtherType = b.type;
+    }
+  }
+
+  if (lastText !== undefined) summary.text = lastText;
+  if (toolUseNames.length > 0) summary.toolUseNames = toolUseNames;
+  if (lastToolResultContent !== undefined) {
+    const r = stringifyToolResultContent(lastToolResultContent);
+    if (r !== undefined) summary.toolResult = r;
+  }
+  if (lastOtherType !== undefined) summary.otherType = lastOtherType;
+
+  return summary;
+}
+
+function lastTwoMessages(body: unknown): LastMessageSummary[] {
+  const messages = (body as { messages?: unknown } | null | undefined)?.messages;
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  const slice = messages.slice(-2);
+  const result: LastMessageSummary[] = [];
+  for (const m of slice) {
+    const s = summarizeMessage(m);
+    if (s) result.push(s);
+  }
+  if (
+    result.length === 2 &&
+    result[0].role === "user" &&
+    result[1].role === "user"
+  ) {
+    return [result[1]];
+  }
+  return result;
+}
+
+const ROLE_CHIP_CLASS =
+  "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
+const TYPE_CHIP_CLASS =
+  "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+
+interface PreviewLine {
+  chip: string;
+  chipClass: string;
+  value?: string;
+  indent?: boolean;
+}
+
+function summaryToLines(summary: LastMessageSummary): PreviewLine[] {
+  const lines: PreviewLine[] = [];
+  lines.push({
+    chip: summary.role,
+    chipClass: ROLE_CHIP_CLASS,
+    value:
+      summary.text !== undefined && summary.text !== ""
+        ? `"${summary.text}"`
+        : undefined,
+  });
+  if (summary.toolUseNames && summary.toolUseNames.length > 0) {
+    lines.push({
+      chip: "tool_use",
+      chipClass: TYPE_CHIP_CLASS,
+      value: summary.toolUseNames.join("|"),
+      indent: true,
+    });
+  }
+  if (summary.toolResult !== undefined) {
+    lines.push({
+      chip: "tool_result",
+      chipClass: TYPE_CHIP_CLASS,
+      value: summary.toolResult ? `"${summary.toolResult}"` : undefined,
+      indent: true,
+    });
+  }
+  if (summary.otherType !== undefined) {
+    lines.push({
+      chip: summary.otherType,
+      chipClass: TYPE_CHIP_CLASS,
+      indent: true,
+    });
+  }
+  return lines;
+}
+
+function LastMessagePreview({ body }: Readonly<{ body: unknown }>) {
+  const summaries = lastTwoMessages(body);
+  if (summaries.length === 0) {
+    return (
+      <div className="text-xs text-gray-500 dark:text-gray-400 italic mb-1">
+        No messages
+      </div>
+    );
+  }
+
+  const lines: PreviewLine[] = summaries.flatMap(summaryToLines);
+
+  return (
+    <div className="mb-2 space-y-0.5">
+      {lines.map((l) => (
+        <div
+          key={`${l.chip}-${l.value ?? ""}-${l.indent ? "i" : ""}`}
+          className={`flex items-center gap-1.5 text-xs min-w-0 ${
+            l.indent ? "pl-4" : ""
+          }`}
+        >
+          <span
+            className={`px-1.5 py-0.5 rounded font-medium shrink-0 ${l.chipClass}`}
+          >
+            {l.chip}
+          </span>
+          {l.value !== undefined && (
+            <span className="truncate text-gray-900 dark:text-gray-50 font-medium">
+              {l.value}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface AnthropicUsageShape {
   input_tokens?: number;
   output_tokens?: number;
@@ -428,6 +611,7 @@ export default function RequestsForSession() {
                     : "hover:bg-gray-50 dark:hover:bg-slate-800"
                 }`}
               >
+                <LastMessagePreview body={req.body} />
                 <div className="flex items-start justify-between mb-1">
                   <div className="flex-1 min-w-0 mr-4 flex items-center space-x-3">
                     {(() => {
