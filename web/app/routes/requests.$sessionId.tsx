@@ -92,11 +92,15 @@ export function shouldRevalidate({
   currentUrl,
   nextUrl,
   defaultShouldRevalidate,
+  formAction,
 }: {
   currentUrl: URL;
   nextUrl: URL;
   defaultShouldRevalidate: boolean;
+  formAction?: string;
 }) {
+  // Always allow explicit revalidations (e.g. the reload button).
+  if (!formAction && defaultShouldRevalidate) return true;
   if (
     currentUrl.pathname === nextUrl.pathname &&
     currentUrl.searchParams.get("model") === nextUrl.searchParams.get("model")
