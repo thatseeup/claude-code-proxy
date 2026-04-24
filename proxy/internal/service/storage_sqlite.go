@@ -530,7 +530,126 @@ func (s *sqliteStorageService) GetSessionSummaries() ([]SessionSummary, error) {
 		return nil, fmt.Errorf("failed to iterate session summaries: %w", err)
 	}
 
+	// Second pass: compute per-session USD cost from stored response bodies.
+	// We scan all rows with a non-null response; for each we extract
+	// (model, usage) from the stored ResponseLog JSON and call
+	// CalculateCostUSD. Unpriceable rows (unsupported model / missing usage)
+	// are silently skipped. Performance note: current SQLite is single-user —
+	// full-scan here is acceptable.
+	costs, err := s.loadSessionCosts()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute session costs: %w", err)
+	}
+	for i := range summaries {
+		if c, ok := costs[summaries[i].SessionID]; ok {
+			v := c
+			summaries[i].TotalCost = &v
+		}
+	}
+
 	return summaries, nil
+}
+
+// sessionCostRow is the input row shape for sumSessionCosts — one per
+// stored request that has a response body. The raw response bytes are the
+// serialized model.ResponseLog for that request.
+type sessionCostRow struct {
+	SessionID    string
+	RequestModel string
+	Response     []byte
+}
+
+// loadSessionCosts executes the per-request scan and folds it into a
+// map[sessionID]totalUSD via sumSessionCosts. Split out so the fold logic
+// can be unit-tested without touching the DB.
+func (s *sqliteStorageService) loadSessionCosts() (map[string]float64, error) {
+	rows, err := s.db.Query(`
+		SELECT COALESCE(session_id, '') AS sid,
+		       COALESCE(model, '') AS model,
+		       response
+		FROM requests
+		WHERE response IS NOT NULL
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query session cost rows: %w", err)
+	}
+	defer rows.Close()
+
+	batch := make([]sessionCostRow, 0, 256)
+	for rows.Next() {
+		var row sessionCostRow
+		var responseJSON sql.NullString
+		if err := rows.Scan(&row.SessionID, &row.RequestModel, &responseJSON); err != nil {
+			return nil, fmt.Errorf("failed to scan cost row: %w", err)
+		}
+		if !responseJSON.Valid || responseJSON.String == "" {
+			continue
+		}
+		row.Response = []byte(responseJSON.String)
+		batch = append(batch, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate cost rows: %w", err)
+	}
+
+	return sumSessionCosts(batch), nil
+}
+
+// sumSessionCosts folds a list of per-request response rows into a
+// per-session USD cost map. Only sessions with at least one priceable
+// request appear in the output; callers that need "null when absent"
+// semantics check map presence.
+//
+// Resolution rules (match the frontend and the plan):
+//   - Prefer body.model when present (that's the actually-served model);
+//     fall back to the request row's `model` column (the routed model).
+//   - Missing usage or unsupported model → silently skip that row.
+func sumSessionCosts(rows []sessionCostRow) map[string]float64 {
+	out := map[string]float64{}
+	for _, row := range rows {
+		cost, ok := costFromResponseBytes(row.Response, row.RequestModel)
+		if !ok {
+			continue
+		}
+		out[row.SessionID] += cost
+	}
+	return out
+}
+
+// costFromResponseBytes parses a stored model.ResponseLog JSON blob and
+// returns the USD cost of its usage. fallbackModel is used when the
+// inner body does not carry its own `model` field (should be rare given
+// how handlers.go assembles responses, but stored blobs from older code
+// paths may lack it).
+func costFromResponseBytes(responseJSON []byte, fallbackModel string) (float64, bool) {
+	if len(responseJSON) == 0 {
+		return 0, false
+	}
+	// Stored shape: model.ResponseLog { ..., "body": <anthropic response json> }
+	var envelope struct {
+		Body json.RawMessage `json:"body"`
+	}
+	if err := json.Unmarshal(responseJSON, &envelope); err != nil {
+		return 0, false
+	}
+	if len(envelope.Body) == 0 {
+		return 0, false
+	}
+	var body struct {
+		Model string                `json:"model"`
+		Usage *model.AnthropicUsage `json:"usage"`
+	}
+	if err := json.Unmarshal(envelope.Body, &body); err != nil {
+		return 0, false
+	}
+	if body.Usage == nil {
+		return 0, false
+	}
+	chosen := body.Model
+	if chosen == "" {
+		chosen = fallbackModel
+	}
+	return CalculateCostUSD(chosen, body.Usage)
 }
 
 // parseStoredTimestamp parses the timestamp format(s) we might find in the

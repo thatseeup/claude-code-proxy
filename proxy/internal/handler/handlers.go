@@ -386,15 +386,20 @@ func (h *Handler) NotFound(w http.ResponseWriter, r *http.Request) {
 
 // sessionResponse mirrors service.SessionSummary but uses RFC3339 string
 // timestamps so the wire format matches RequestLog.Timestamp.
+//
+// TotalCost is a pointer so "no priceable requests" serializes as JSON
+// `null` rather than `0`. It is computed at read time by the storage
+// layer via service.CalculateCostUSD — never persisted.
 type sessionResponse struct {
-	SessionID          string `json:"sessionId"`
-	FirstTimestamp     string `json:"firstTimestamp"`
-	LastTimestamp      string `json:"lastTimestamp"`
-	RequestCount       int    `json:"requestCount"`
-	ProjectPath        string `json:"projectPath"`
-	ProjectDisplayName string `json:"projectDisplayName"`
-	Title              string `json:"title"`
-	HasConversation    bool   `json:"hasConversation"`
+	SessionID          string   `json:"sessionId"`
+	FirstTimestamp     string   `json:"firstTimestamp"`
+	LastTimestamp      string   `json:"lastTimestamp"`
+	RequestCount       int      `json:"requestCount"`
+	ProjectPath        string   `json:"projectPath"`
+	ProjectDisplayName string   `json:"projectDisplayName"`
+	Title              string   `json:"title"`
+	HasConversation    bool     `json:"hasConversation"`
+	TotalCost          *float64 `json:"totalCost"`
 }
 
 func (h *Handler) GetSessions(w http.ResponseWriter, r *http.Request) {
@@ -412,6 +417,7 @@ func (h *Handler) GetSessions(w http.ResponseWriter, r *http.Request) {
 			FirstTimestamp: s.FirstTimestamp.Format(time.RFC3339),
 			LastTimestamp:  s.LastTimestamp.Format(time.RFC3339),
 			RequestCount:   s.RequestCount,
+			TotalCost:      s.TotalCost,
 		}
 
 		// Enrich with project/title from the session index.

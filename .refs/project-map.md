@@ -1,5 +1,5 @@
 # Project Map
-_생성: 2026-04-19 | 갱신: 2026-04-22 | 대상 커밋: c8a7389_
+_생성: 2026-04-19 | 갱신: 2026-04-25 | 대상 커밋: 0edf7c8 + api_cost feature_
 
 ## 개요
 Claude Code 용 LLM 프록시 + 모니터링 대시보드.
@@ -47,10 +47,12 @@ claude-code-proxy/
         conversation_test.go  — `extractSessionTitle` + `projectDisplayName` 단위 테스트
         model_router.go       — 모델 prefix 매칭 + subagent 해시 매칭 라우팅 결정
         model_router_test.go  — 라우터 edge case 테스트
+        pricing.go            — USD/Million 가격표 + `CalculateCostUSD(modelID, *AnthropicUsage) (float64, bool)` 순수 함수. 지원 모델: claude-opus-4-7, claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5 (정확 일치 매칭, prefix 금지). cache_creation 객체가 있으면 ephemeral_5m / ephemeral_1h 각각 단가 적용; 없고 `CacheCreationInputTokens>0` 이면 전량 1h 단가. 미매칭/누락 → `ok=false`
+        pricing_test.go       — 4개 모델 × usage 변형 + 미지원 모델/nil/tier 무시 + `sumSessionCosts` 폴드 테스트
         session_index.go      — `SessionIndex` 인터페이스 (`Lookup`, `Rebuild`, `Watch`) + `sessionIndexImpl` 구현체. `NewSessionIndex(rootDir, logger)` 생성자. Rebuild: rootDir 하위 jsonl 전체 스캔 → `map[sessionID]SessionIndexEntry` 원자 교체. Watch: fsnotify 1차 시도 + 실패 시 10s 폴링 폴백. 서브디렉토리마다 watcher.Add 호출(fsnotify 재귀 미지원). `newSessionIndexWithPollInterval` 은 테스트용 패키지-프라이빗 생성자
         session_index_test.go — `TestSessionIndex*` + `TestSessionIndexWatch*` 단위/동시성/감시 테스트
-        storage.go            — StorageService 인터페이스 정의 (`GetRequestsBySessionID`, `GetSessionSummaries`, `DeleteRequestsBySessionID` 포함), SessionSummary 타입 (`projectPath`, `projectDisplayName`, `title`, `hasConversation` 필드 포함 — 스토리지 레이어는 채우지 않고 핸들러가 SessionIndex 로 채움)
-        storage_sqlite.go     — SQLite 구현체, requests 테이블 스키마 정의 (`session_id` 컬럼 + `idx_session_id` 포함)
+        storage.go            — StorageService 인터페이스 정의 (`GetRequestsBySessionID`, `GetSessionSummaries`, `DeleteRequestsBySessionID` 포함), SessionSummary 타입 (`projectPath`, `projectDisplayName`, `title`, `hasConversation`, `TotalCost *float64` 필드 포함 — 스토리지 레이어는 SessionIndex 외 필드를 채우지 않고 핸들러가 SessionIndex 로 채움; `TotalCost` 는 `GetSessionSummaries` 가 `pricing.CalculateCostUSD` 로 계산해 채움)
+        storage_sqlite.go     — SQLite 구현체, requests 테이블 스키마 정의 (`session_id` 컬럼 + `idx_session_id` 포함). `GetSessionSummaries` 는 기본 GROUP BY 쿼리 + `response IS NOT NULL` 인 행을 2차 스캔해 `costFromResponseBytes` → `sumSessionCosts` 폴드로 세션별 비용 계산 후 병합. 유효 비용 0건 세션은 `TotalCost=nil`
 
   web/                        — Remix 프론트엔드 (Node >= 20, Vite 6)
     package.json              — scripts: build/dev/lint/start/typecheck
@@ -89,6 +91,8 @@ claude-code-proxy/
       utils/
         formatters.ts         — 포맷 헬퍼
         models.ts             — isOpenAIModel, getProviderName, getChatCompletionsEndpoint
+        pricing.ts            — `calculateCostUSD(model, usage)` + `formatCostUSD(cost)` 포맷터. 가격표는 `proxy/internal/service/pricing.go` 와 동기 유지 필수(정확 일치 매칭). 포맷은 locale 독립 — `toFixed(2)` + 정규식 천단위 콤마 (Number.prototype.toLocaleString 사용 금지)
+        pricing.test.ts       — 계산/포맷 vitest 케이스 (미지원 모델, nil, 음수, NaN/Infinity, 천단위 콤마, 반올림)
 ```
 
 ---
@@ -168,7 +172,7 @@ CREATE TABLE requests (
 ### Backend API 엔드포인트 (cmd/proxy/main.go)
 - `POST /v1/messages` — Claude Code 프록시 본체
 - `GET /api/requests` — 요청 목록 (쿼리: `model`, `sessionId`, `page`, `limit`). `sessionId=unknown` → Unknown 버킷
-- `GET /api/sessions` — 세션 요약 `[{sessionId, firstTimestamp, lastTimestamp, requestCount, projectPath, projectDisplayName, title, hasConversation}]` (lastTimestamp DESC). 핸들러가 `SessionIndex.Lookup` 으로 프로젝트 정보를 채움; 매칭 없으면 빈 값 + `hasConversation=false`. Unknown 버킷(빈 sessionId)은 항상 `hasConversation=false`
+- `GET /api/sessions` — 세션 요약 `[{sessionId, firstTimestamp, lastTimestamp, requestCount, projectPath, projectDisplayName, title, hasConversation, totalCost}]` (lastTimestamp DESC). 핸들러가 `SessionIndex.Lookup` 으로 프로젝트 정보를 채움; 매칭 없으면 빈 값 + `hasConversation=false`. Unknown 버킷(빈 sessionId)은 항상 `hasConversation=false`. `totalCost` 는 `number | null` — 스토리지 레이어가 매 응답의 `body.usage`+`body.model`(없으면 row.model) 기반으로 `CalculateCostUSD` 호출·세션별 누적. 유효 비용 0건이면 `null`. DB 에 저장하지 않고 요청 시 재계산
 - `DELETE /api/sessions/{id}` — 세션 단위 삭제. `id=unknown` 이면 Unknown 버킷 삭제
 - `GET /api/projects` — Claude Code 프로젝트 요약 `[{projectPath, displayName, lastMTime, conversationCount}]` (lastMTime DESC)
 - `GET /api/conversations/project?project=<path>` — 특정 프로젝트의 대화 목록 (mux 등록 순서 중요: `/project` 를 `{id}` 보다 먼저)
@@ -299,3 +303,4 @@ CREATE TABLE requests (
 | `decodeProjectPath` / `projectDisplayName` (conversation.go) | encoded CWD 를 파일 시스템 stat 으로 복원 — 세그먼트 단위 lookahead 로 하이픈 포함 폴더명(`claude-code-proxy`) 을 정확히 복원. 디스크에 프로젝트가 없으면 remainder 그대로 반환. `GetProjects` 호출마다 stat 발생(캐시 없음), stub `existsFn` 주입 가능(`projectDisplayNameWith`) |
 | `HorizontalSplit.tsx` mousemove/mouseup 리스너 정리 | `onMouseDown` 이 `window` 레벨 리스너 등록 → `onUp` 에서 반드시 제거 + 언마운트 cleanup 으로 body `userSelect/cursor` 복원. 누락 시 드래그 종료 후에도 커서가 `col-resize` 에 고정 / 메모리 누수 |
 | Split 상태 영속화 금지 | 요구사항상 localStorage/쿠키/서버 저장 없이 매 세션 디폴트로 복귀. `HorizontalSplit` 는 `defaultLeftWidth=420` 로 마운트 시 리셋 — 변경 시 UX 회귀 주의 |
+| 가격표 동기화 (`pricing.go` ↔ `pricing.ts`) | USD/Million 단가 테이블은 Go 백엔드(`proxy/internal/service/pricing.go`)와 TS 프론트(`web/app/utils/pricing.ts`) 두 곳에 중복 선언됨 — 한쪽만 갱신하면 `/api/sessions.totalCost` 와 Request 카드 개별 비용이 서로 다른 값을 표시. 모델 매칭은 **정확 일치**만 허용(prefix 금지), 가격 추가/수정 시 양쪽 동시 수정 + 양쪽 단위 테스트 갱신 |

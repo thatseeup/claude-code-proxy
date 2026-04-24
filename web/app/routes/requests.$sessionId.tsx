@@ -18,6 +18,7 @@ import RequestDetailContent from "../components/RequestDetailContent";
 import SessionPicker from "../components/SessionPicker";
 import type { SessionSummary } from "../components/SessionPicker";
 import { formatStableDate, formatStableTime } from "../utils/formatters";
+import { calculateCostUSD, formatCostUSD } from "../utils/pricing";
 
 interface RequestLog {
   requestId: string;
@@ -694,14 +695,44 @@ export default function RequestsForSession() {
                       </span>
                     )}
                   </div>
-                  {req.response?.responseTime != null && (
-                    <span className="font-mono text-gray-600 dark:text-gray-400 shrink-0">
-                      <span className="font-medium text-gray-900 dark:text-gray-100">
-                        {(req.response.responseTime / 1000).toFixed(2)}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {(() => {
+                      const costModel =
+                        req.response?.body?.model ??
+                        req.routedModel ??
+                        req.body?.model ??
+                        req.originalModel ??
+                        null;
+                      const cost = calculateCostUSD(
+                        costModel,
+                        req.response?.body?.usage,
+                      );
+                      const formatted = formatCostUSD(cost);
+                      if (!formatted) return null;
+                      // Split `$` prefix from the amount so the dollar sign
+                      // is dimmed while the amount matches the seconds color
+                      // treatment (mirror of the `s` suffix on responseTime).
+                      const dollarIdx = formatted.indexOf("$");
+                      const prefix = formatted.slice(0, dollarIdx + 1);
+                      const amount = formatted.slice(dollarIdx + 1);
+                      return (
+                        <span className="font-mono text-gray-600 dark:text-gray-400">
+                          {prefix}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {amount}
+                          </span>
+                        </span>
+                      );
+                    })()}
+                    {req.response?.responseTime != null && (
+                      <span className="font-mono text-gray-600 dark:text-gray-400">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {(req.response.responseTime / 1000).toFixed(2)}
+                        </span>
+                        s
                       </span>
-                      s
-                    </span>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center text-xs font-mono">
                   <UsageLine usage={req.response?.body?.usage} />

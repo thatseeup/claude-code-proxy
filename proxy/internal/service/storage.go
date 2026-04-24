@@ -9,6 +9,12 @@ import (
 
 // SessionSummary is a compact aggregate view of requests grouped by session_id.
 // SessionID == "" represents the "Unknown" (header missing / empty) bucket.
+//
+// TotalCost is a pointer so the wire format can distinguish "no priceable
+// requests in this session" (nil → JSON `null`) from "priceable requests
+// summed to zero" (rare but possible; non-nil). It is computed at read time
+// from each request's response body + model via CalculateCostUSD — never
+// persisted to the DB.
 type SessionSummary struct {
 	SessionID          string    `json:"sessionId"`
 	FirstTimestamp     time.Time `json:"firstTimestamp"`
@@ -18,6 +24,7 @@ type SessionSummary struct {
 	ProjectDisplayName string    `json:"projectDisplayName"`
 	Title              string    `json:"title"`
 	HasConversation    bool      `json:"hasConversation"`
+	TotalCost          *float64  `json:"totalCost"`
 }
 
 type StorageService interface {

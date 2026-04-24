@@ -6,6 +6,8 @@ import {
 import { ChevronDown, MessageSquareText, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { formatCostUSD } from "~/utils/pricing";
+
 export interface SessionSummary {
   sessionId: string;
   firstTimestamp: string;
@@ -15,6 +17,7 @@ export interface SessionSummary {
   projectDisplayName?: string;
   title?: string;
   hasConversation?: boolean;
+  totalCost?: number | null;
 }
 
 interface SessionPickerProps {
@@ -312,10 +315,27 @@ export default function SessionPicker({
               {triggerShortId}
             </span>
             {activeSummary ? (
-              <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                {activeSummary.requestCount} req ·{" "}
-                {formatFirstSeen(activeSummary.lastTimestamp)}
-              </span>
+              (() => {
+                const costText = formatCostUSD(activeSummary.totalCost ?? null);
+                return (
+                  <span className="w-full flex items-center justify-between gap-2 text-[10px]">
+                    <span className="flex items-center gap-1 min-w-0 text-gray-500 dark:text-gray-400">
+                      <span>{activeSummary.requestCount} req</span>
+                      {costText ? (
+                        <>
+                          <span>·</span>
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {costText}
+                          </span>
+                        </>
+                      ) : null}
+                    </span>
+                    <span className="ml-auto shrink-0 text-gray-500 dark:text-gray-400">
+                      {formatFirstSeen(activeSummary.lastTimestamp)}
+                    </span>
+                  </span>
+                );
+              })()
             ) : null}
           </div>
           <ChevronDown
@@ -395,8 +415,24 @@ export default function SessionPicker({
                       >
                         {s.sessionId || "Unknown"}
                       </div>
-                      <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                        {s.requestCount} req · {formatFirstSeen(s.lastTimestamp)}
+                      <div className="flex items-center justify-between gap-2 text-[10px] mt-0.5">
+                        <span className="flex items-center gap-1 min-w-0 text-gray-500 dark:text-gray-400">
+                          <span>{s.requestCount} req</span>
+                          {(() => {
+                            const costText = formatCostUSD(s.totalCost ?? null);
+                            return costText ? (
+                              <>
+                                <span>·</span>
+                                <span className="text-gray-700 dark:text-gray-300">
+                                  {costText}
+                                </span>
+                              </>
+                            ) : null;
+                          })()}
+                        </span>
+                        <span className="ml-auto shrink-0 text-gray-500 dark:text-gray-400">
+                          {formatFirstSeen(s.lastTimestamp)}
+                        </span>
                       </div>
                     </button>
                   </li>
