@@ -550,6 +550,15 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 				if reason, ok := message["stop_reason"].(string); ok {
 					stopReason = reason
 				}
+				// Seed finalUsage from message_start so fields that only appear
+				// here (e.g. `cache_creation` object) aren't lost when
+				// message_delta arrives without them.
+				if usage, ok := message["usage"].(map[string]interface{}); ok {
+					if finalUsage == nil {
+						finalUsage = &model.AnthropicUsage{}
+					}
+					applyUsageFields(finalUsage, usage)
+				}
 			}
 			// Preserve upstream key order by keeping the raw bytes of the
 			// `message` object from message_start.
@@ -567,35 +576,10 @@ func (h *Handler) handleStreamingResponse(w http.ResponseWriter, resp *http.Resp
 		if eventType, ok := genericEvent["type"].(string); ok && eventType == "message_delta" {
 			// Usage is at top level for message_delta events
 			if usage, ok := genericEvent["usage"].(map[string]interface{}); ok {
-				// Create finalUsage if it doesn't exist yet
 				if finalUsage == nil {
 					finalUsage = &model.AnthropicUsage{}
 				}
-
-				// Capture all usage fields
-				if inputTokens, ok := usage["input_tokens"].(float64); ok {
-					finalUsage.InputTokens = int(inputTokens)
-				}
-				if outputTokens, ok := usage["output_tokens"].(float64); ok {
-					finalUsage.OutputTokens = int(outputTokens)
-				}
-				if cacheCreation, ok := usage["cache_creation_input_tokens"].(float64); ok {
-					finalUsage.CacheCreationInputTokens = int(cacheCreation)
-				}
-				if cacheRead, ok := usage["cache_read_input_tokens"].(float64); ok {
-					finalUsage.CacheReadInputTokens = int(cacheRead)
-				}
-				if cacheCreationObj, ok := usage["cache_creation"].(map[string]interface{}); ok {
-					cc := &model.AnthropicCacheCreation{}
-					if v, ok := cacheCreationObj["ephemeral_5m_input_tokens"].(float64); ok {
-						cc.Ephemeral5mInputTokens = int(v)
-					}
-					if v, ok := cacheCreationObj["ephemeral_1h_input_tokens"].(float64); ok {
-						cc.Ephemeral1hInputTokens = int(v)
-					}
-					finalUsage.CacheCreation = cc
-				}
-
+				applyUsageFields(finalUsage, usage)
 			}
 		}
 
@@ -788,6 +772,38 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// applyUsageFields copies usage fields from a raw JSON-decoded map into
+// `dst`, overwriting each field only when present in `src`. Used so
+// message_start and message_delta usage payloads can both feed the same
+// accumulated usage struct without one erasing fields the other provided.
+func applyUsageFields(dst *model.AnthropicUsage, src map[string]interface{}) {
+	if inputTokens, ok := src["input_tokens"].(float64); ok {
+		dst.InputTokens = int(inputTokens)
+	}
+	if outputTokens, ok := src["output_tokens"].(float64); ok {
+		dst.OutputTokens = int(outputTokens)
+	}
+	if cacheCreation, ok := src["cache_creation_input_tokens"].(float64); ok {
+		dst.CacheCreationInputTokens = int(cacheCreation)
+	}
+	if cacheRead, ok := src["cache_read_input_tokens"].(float64); ok {
+		dst.CacheReadInputTokens = int(cacheRead)
+	}
+	if cacheCreationObj, ok := src["cache_creation"].(map[string]interface{}); ok {
+		cc := &model.AnthropicCacheCreation{}
+		if v, ok := cacheCreationObj["ephemeral_5m_input_tokens"].(float64); ok {
+			cc.Ephemeral5mInputTokens = int(v)
+		}
+		if v, ok := cacheCreationObj["ephemeral_1h_input_tokens"].(float64); ok {
+			cc.Ephemeral1hInputTokens = int(v)
+		}
+		dst.CacheCreation = cc
+	}
+	if serviceTier, ok := src["service_tier"].(string); ok {
+		dst.ServiceTier = serviceTier
+	}
 }
 
 // mergePreservingOrder rebuilds a JSON object that keeps the key order of

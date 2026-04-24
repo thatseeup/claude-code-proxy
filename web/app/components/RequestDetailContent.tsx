@@ -1302,6 +1302,8 @@ function ResponseOverviewTable({ response }: { readonly response: NonNullable<Re
       rows: [
         { label: 'cache_read_input_tokens', value: num(usage?.cache_read_input_tokens) },
         { label: 'cache_creation_input_tokens', value: num(usage?.cache_creation_input_tokens) },
+        { label: 'cache_creation.ephemeral_5m_input_tokens', value: num(usage?.cache_creation?.ephemeral_5m_input_tokens) },
+        { label: 'cache_creation.ephemeral_1h_input_tokens', value: num(usage?.cache_creation?.ephemeral_1h_input_tokens) },
         { label: 'input_tokens', value: num(usage?.input_tokens) },
         { label: 'output_tokens', value: num(usage?.output_tokens) },
       ],
