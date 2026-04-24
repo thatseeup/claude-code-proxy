@@ -285,7 +285,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
           {/* Tools */}
           {request.body.tools && request.body.tools.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div 
+              <div
                 className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
                 onClick={() => toggleSection('tools')}
               >
@@ -300,6 +300,16 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                   <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
                     expandedSections.tools ? 'rotate-180' : ''
                   }`} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {request.body.tools.map((tool, index) => (
+                    <span
+                      key={index}
+                      className="text-xs font-mono bg-white text-gray-700 border border-gray-200 px-2 py-0.5 rounded-full"
+                    >
+                      {tool.name}
+                    </span>
+                  ))}
                 </div>
               </div>
               {expandedSections.tools && (
