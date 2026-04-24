@@ -230,9 +230,26 @@ export default function SessionPicker({
               {selectedProject}
             </span>
             {selectedGroup ? (
-              <span className="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">
-                ({selectedGroup.sessions.length})
-              </span>
+              <>
+                <span className="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">
+                  ({selectedGroup.sessions.length})
+                </span>
+                {(() => {
+                  const sum = selectedGroup.sessions.reduce<number | null>(
+                    (acc, s) =>
+                      typeof s.totalCost === "number"
+                        ? (acc ?? 0) + s.totalCost
+                        : acc,
+                    null,
+                  );
+                  const label = formatCostUSD(sum);
+                  return label ? (
+                    <span className="shrink-0 text-[10px] font-mono text-gray-600 dark:text-gray-300">
+                      {label}
+                    </span>
+                  ) : null;
+                })()}
+              </>
             ) : null}
           </div>
           <ChevronDown
