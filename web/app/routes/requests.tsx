@@ -45,6 +45,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({ sessions });
 }
 
+// Avoid refetching the sessions list (which scans every response body to
+// aggregate cost) on every request-row click. Row selection only changes
+// `?rid=` — the parent's data doesn't depend on it. We still revalidate when
+// the pathname changes (session switch) or when an action runs (e.g. session
+// delete fetcher, explicit revalidator.revalidate()).
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+  formAction,
+}: {
+  currentUrl: URL;
+  nextUrl: URL;
+  defaultShouldRevalidate: boolean;
+  formAction?: string;
+}) {
+  if (formAction) return defaultShouldRevalidate;
+  if (currentUrl.pathname === nextUrl.pathname) return false;
+  return defaultShouldRevalidate;
+}
+
 export default function RequestsLayout() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950">

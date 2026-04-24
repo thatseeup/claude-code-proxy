@@ -4,7 +4,6 @@ import {
   Link,
   useFetcher,
   useLoaderData,
-  useNavigation,
   useParams,
   useRevalidator,
   useRouteLoaderData,
@@ -455,9 +454,7 @@ export default function RequestsForSession() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rid = searchParams.get("rid") ?? "";
   const revalidator = useRevalidator();
-  const navigation = useNavigation();
-  const isReloading =
-    revalidator.state !== "idle" || navigation.state !== "idle";
+  const isReloading = revalidator.state !== "idle";
 
   const summarySelected =
     requests.find((r) => r.requestId === rid) ??
