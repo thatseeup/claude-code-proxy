@@ -376,7 +376,7 @@ function LastMessagePreview({ body }: Readonly<{ body: unknown }>) {
   const lines: PreviewLine[] = summaries.flatMap(summaryToLines);
 
   return (
-    <div className="mb-2 pb-2 space-y-0.5 border-b border-gray-300 dark:border-slate-600">
+    <div className="space-y-0.5">
       {lines.map((l) => (
         <div
           key={`${l.chip}-${l.value ?? ""}-${l.indent ? "i" : ""}`}
@@ -628,111 +628,124 @@ export default function RequestsForSession() {
                   params.sessionId ?? ""
                 )}?${nextParams.toString()}`}
                 replace
-                className={`block px-4 py-3 rounded-md border transition-colors ${
+                className={`block rounded-md border overflow-hidden transition-colors ${
                   isSelected
-                    ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800"
-                    : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
+                    ? "border-blue-200 dark:border-blue-800"
+                    : "border-gray-200 dark:border-slate-700"
                 }`}
               >
-                <LastMessagePreview body={req.body} />
-                <div className="flex items-start justify-between mb-1">
-                  <div className="flex-1 min-w-0 mr-4 flex items-center space-x-3">
-                    {(() => {
-                      const kind = classifySession(req.body);
-                      if (kind === "main") return null;
-                      const chip = SESSION_CHIPS[kind];
-                      return (
-                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${chip.className}`}>
-                          {chip.label}
-                        </span>
-                      );
-                    })()}
-                    <h3 className="text-sm font-medium">
-                      {modelBadge(model)}
-                    </h3>
-                    {req.routedModel &&
-                      req.originalModel &&
-                      req.routedModel !== req.originalModel && (
-                        <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded font-medium flex items-center space-x-1">
-                          <ArrowLeftRight className="w-3 h-3" />
-                          <span>routed</span>
+                <div
+                  className={`px-4 py-3 ${
+                    isSelected
+                      ? "bg-blue-100 dark:bg-blue-950/60"
+                      : "bg-gray-100 dark:bg-slate-950/70"
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="flex-1 min-w-0 mr-4 flex items-center space-x-3">
+                      {(() => {
+                        const kind = classifySession(req.body);
+                        if (kind === "main") return null;
+                        const chip = SESSION_CHIPS[kind];
+                        return (
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${chip.className}`}>
+                            {chip.label}
+                          </span>
+                        );
+                      })()}
+                      <h3 className="text-sm font-medium">
+                        {modelBadge(model)}
+                      </h3>
+                      {req.routedModel &&
+                        req.originalModel &&
+                        req.routedModel !== req.originalModel && (
+                          <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 rounded font-medium flex items-center space-x-1">
+                            <ArrowLeftRight className="w-3 h-3" />
+                            <span>routed</span>
+                          </span>
+                        )}
+                      {typeof status === "number" && (
+                        <span
+                          className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusPillClass(
+                            status
+                          )}`}
+                        >
+                          {status}
                         </span>
                       )}
-                    {typeof status === "number" && (
-                      <span
-                        className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusPillClass(
-                          status
-                        )}`}
-                      >
-                        {status}
-                      </span>
-                    )}
+                    </div>
+                    <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      {formatStableDate(req.timestamp)}{" "}
+                      {formatStableTime(req.timestamp)}
+                    </div>
                   </div>
-                  <div className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    {formatStableDate(req.timestamp)}{" "}
-                    {formatStableTime(req.timestamp)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 mb-1 leading-none text-xs">
-                  <div className="flex items-center flex-wrap gap-1.5 min-w-0">
-                    {req.body && !isStreamRequest(req.body) && (
-                      <span className="px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                        Non-Stream
-                      </span>
-                    )}
-                    {req.response?.body?.stop_reason && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded font-medium ${
-                          req.response.body.stop_reason === "end_turn"
-                            ? "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300"
-                            : "bg-slate-100 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500"
-                        }`}
-                      >
-                        {req.response.body.stop_reason}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {(() => {
-                      const costModel =
-                        req.response?.body?.model ??
-                        req.routedModel ??
-                        req.body?.model ??
-                        req.originalModel ??
-                        null;
-                      const cost = calculateCostUSD(
-                        costModel,
-                        req.response?.body?.usage,
-                      );
-                      const formatted = formatCostUSD(cost);
-                      if (!formatted) return null;
-                      // Split `$` prefix from the amount so the dollar sign
-                      // is dimmed while the amount matches the seconds color
-                      // treatment (mirror of the `s` suffix on responseTime).
-                      const dollarIdx = formatted.indexOf("$");
-                      const prefix = formatted.slice(0, dollarIdx + 1);
-                      const amount = formatted.slice(dollarIdx + 1);
-                      return (
-                        <span className="font-mono text-gray-600 dark:text-gray-400">
-                          {prefix}
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {amount}
+                  <div className="flex items-center justify-between gap-2 mb-1 leading-none text-xs">
+                    <div className="flex items-center flex-wrap gap-1.5 min-w-0">
+                      {req.body && !isStreamRequest(req.body) && (
+                        <span className="px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                          Non-Stream
+                        </span>
+                      )}
+                      {req.response?.body?.stop_reason && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            req.response.body.stop_reason === "end_turn"
+                              ? "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300"
+                              : "bg-slate-100 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500"
+                          }`}
+                        >
+                          {req.response.body.stop_reason}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(() => {
+                        const costModel =
+                          req.response?.body?.model ??
+                          req.routedModel ??
+                          req.body?.model ??
+                          req.originalModel ??
+                          null;
+                        const cost = calculateCostUSD(
+                          costModel,
+                          req.response?.body?.usage,
+                        );
+                        const formatted = formatCostUSD(cost);
+                        if (!formatted) return null;
+                        const dollarIdx = formatted.indexOf("$");
+                        const prefix = formatted.slice(0, dollarIdx + 1);
+                        const amount = formatted.slice(dollarIdx + 1);
+                        return (
+                          <span className="font-mono text-gray-600 dark:text-gray-400">
+                            {prefix}
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                              {amount}
+                            </span>
                           </span>
+                        );
+                      })()}
+                      {req.response?.responseTime != null && (
+                        <span className="font-mono text-gray-600 dark:text-gray-400">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {(req.response.responseTime / 1000).toFixed(2)}
+                          </span>
+                          s
                         </span>
-                      );
-                    })()}
-                    {req.response?.responseTime != null && (
-                      <span className="font-mono text-gray-600 dark:text-gray-400">
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {(req.response.responseTime / 1000).toFixed(2)}
-                        </span>
-                        s
-                      </span>
-                    )}
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center text-xs font-mono">
+                    <UsageLine usage={req.response?.body?.usage} />
                   </div>
                 </div>
-                <div className="flex items-center text-xs font-mono">
-                  <UsageLine usage={req.response?.body?.usage} />
+                <div
+                  className={`px-4 py-2 ${
+                    isSelected
+                      ? "bg-blue-50 dark:bg-blue-900/30"
+                      : "bg-white dark:bg-slate-900"
+                  }`}
+                >
+                  <LastMessagePreview body={req.body} />
                 </div>
               </Link>
             );
