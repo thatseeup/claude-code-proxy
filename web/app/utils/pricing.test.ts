@@ -86,12 +86,35 @@ describe("calculateCostUSD", () => {
       "claude-sonnet-4-5",
       "gpt-4",
       "",
-      "claude-opus-4-7-beta", // exact match only
+      "claude-opus-4-7-beta", // arbitrary suffix must NOT match
+      "claude-opus-4-5-20251001", // dated alias of an unsupported base
+      "claude-haiku-4-5-2025101", // 7-digit suffix — not a valid YYYYMMDD
+      "claude-haiku-4-5-202510011", // 9-digit suffix — not a valid YYYYMMDD
     ];
     for (const m of models) {
       expect(
         calculateCostUSD(m, { input_tokens: 1000, output_tokens: 100 }),
       ).toBeNull();
+    }
+  });
+
+  it("dated alias normalizes to base id", () => {
+    // Claude Code emits ids like "claude-haiku-4-5-20251001". They must
+    // price identically to the base id "claude-haiku-4-5".
+    const usage = { input_tokens: 1_000_000, output_tokens: 1_000_000 };
+    const base = calculateCostUSD("claude-haiku-4-5", usage);
+    const dated = calculateCostUSD("claude-haiku-4-5-20251001", usage);
+    expect(base).not.toBeNull();
+    expect(dated).not.toBeNull();
+    approx(dated as number, base as number);
+
+    // Spot-check the other base ids accept dated aliases too.
+    for (const id of [
+      "claude-opus-4-7-20260101",
+      "claude-opus-4-6-20251231",
+      "claude-sonnet-4-6-20251015",
+    ]) {
+      expect(calculateCostUSD(id, usage)).not.toBeNull();
     }
   });
 

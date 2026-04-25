@@ -1,7 +1,8 @@
 // Anthropic model pricing for the UI.
 //
 // Keep this table in sync with proxy/internal/service/pricing.go.
-// Matching is strictly by exact model id — no prefix matching.
+// Matching is by exact model id — no prefix matching — after stripping a
+// trailing "-YYYYMMDD" dated alias (see normalizeModelId).
 // All values are USD per 1,000,000 tokens.
 //
 // Source: https://platform.claude.com/docs/en/about-claude/pricing
@@ -56,6 +57,23 @@ export type UsageInput = {
   } | null;
 };
 
+// Match a trailing "-YYYYMMDD" snapshot alias (e.g. "-20251001"). Only an
+// exact 8-digit date is accepted — arbitrary suffixes like "-beta" must NOT
+// match, since pricing lookup is exact-match on the base ID.
+const DATED_ALIAS_SUFFIX = /-\d{8}$/;
+
+/**
+ * Strip a trailing "-YYYYMMDD" dated alias only when doing so yields a base
+ * ID that exists in PRICING_TABLE. Otherwise the input is returned unchanged
+ * so unsupported/unknown IDs still fail lookup.
+ */
+function normalizeModelId(modelId: string): string {
+  if (PRICING_TABLE[modelId]) return modelId;
+  const stripped = modelId.replace(DATED_ALIAS_SUFFIX, "");
+  if (stripped !== modelId && PRICING_TABLE[stripped]) return stripped;
+  return modelId;
+}
+
 function tokensToUSD(tokens: number | undefined, pricePerMillion: number): number {
   if (!tokens || tokens <= 0) return 0;
   return (tokens * pricePerMillion) / 1_000_000;
@@ -65,7 +83,9 @@ function tokensToUSD(tokens: number | undefined, pricePerMillion: number): numbe
  * Calculate USD cost for a (model, usage) pair.
  *
  * Returns null when:
- *   - model is null/undefined/empty or not present in PRICING_TABLE (exact match only)
+ *   - model is null/undefined/empty, or — after stripping a trailing
+ *     "-YYYYMMDD" dated alias — is not present in PRICING_TABLE. Matching
+ *     is exact (no prefix matching) on the normalized id.
  *   - usage is null/undefined
  *
  * Cache write distribution:
@@ -83,7 +103,7 @@ export function calculateCostUSD(
 ): number | null {
   if (!model) return null;
   if (!usage) return null;
-  const price = PRICING_TABLE[model];
+  const price = PRICING_TABLE[normalizeModelId(model)];
   if (!price) return null;
 
   let cost = 0;

@@ -47,7 +47,7 @@ claude-code-proxy/
         conversation_test.go  — `extractSessionTitle` + `projectDisplayName` 단위 테스트
         model_router.go       — 모델 prefix 매칭 + subagent 해시 매칭 라우팅 결정
         model_router_test.go  — 라우터 edge case 테스트
-        pricing.go            — USD/Million 가격표 + `CalculateCostUSD(modelID, *AnthropicUsage) (float64, bool)` 순수 함수. 지원 모델: claude-opus-4-7, claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5 (정확 일치 매칭, prefix 금지). cache_creation 객체가 있으면 ephemeral_5m / ephemeral_1h 각각 단가 적용; 없고 `CacheCreationInputTokens>0` 이면 전량 1h 단가. 미매칭/누락 → `ok=false`
+        pricing.go            — USD/Million 가격표 + `CalculateCostUSD(modelID, *AnthropicUsage) (float64, bool)` 순수 함수. 지원 base 모델: claude-opus-4-7, claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5. lookup 직전에 `normalizeModelID` 가 트레일링 `-YYYYMMDD`(정확히 8자리 숫자) dated alias 만 잘라 base id 로 매핑(예: `claude-haiku-4-5-20251001` → `claude-haiku-4-5`). 그 외 prefix 매칭은 금지(`claude-opus-4-7-beta` 같은 임의 suffix 는 미매칭). cache_creation 객체가 있으면 ephemeral_5m / ephemeral_1h 각각 단가 적용; 없고 `CacheCreationInputTokens>0` 이면 전량 1h 단가. 미매칭/누락 → `ok=false`
         pricing_test.go       — 4개 모델 × usage 변형 + 미지원 모델/nil/tier 무시 + `sumSessionCosts` 폴드 테스트
         session_index.go      — `SessionIndex` 인터페이스 (`Lookup`, `Rebuild`, `Watch`) + `sessionIndexImpl` 구현체. `NewSessionIndex(rootDir, logger)` 생성자. Rebuild: rootDir 하위 jsonl 전체 스캔 → `map[sessionID]SessionIndexEntry` 원자 교체. Watch: fsnotify 1차 시도 + 실패 시 10s 폴링 폴백. 서브디렉토리마다 watcher.Add 호출(fsnotify 재귀 미지원). `newSessionIndexWithPollInterval` 은 테스트용 패키지-프라이빗 생성자
         session_index_test.go — `TestSessionIndex*` + `TestSessionIndexWatch*` 단위/동시성/감시 테스트
@@ -91,7 +91,7 @@ claude-code-proxy/
       utils/
         formatters.ts         — 포맷 헬퍼
         models.ts             — isOpenAIModel, getProviderName, getChatCompletionsEndpoint
-        pricing.ts            — `calculateCostUSD(model, usage)` + `formatCostUSD(cost)` 포맷터. 가격표는 `proxy/internal/service/pricing.go` 와 동기 유지 필수(정확 일치 매칭). 포맷은 locale 독립 — `toFixed(2)` + 정규식 천단위 콤마 (Number.prototype.toLocaleString 사용 금지)
+        pricing.ts            — `calculateCostUSD(model, usage)` + `formatCostUSD(cost)` 포맷터. 가격표는 `proxy/internal/service/pricing.go` 와 동기 유지 필수. lookup 직전 `normalizeModelId` 가 트레일링 `-YYYYMMDD` dated alias 만 잘라 base id 로 매핑(Go 측과 동일 정책). 포맷은 locale 독립 — `toFixed(2)` + 정규식 천단위 콤마 (Number.prototype.toLocaleString 사용 금지)
         pricing.test.ts       — 계산/포맷 vitest 케이스 (미지원 모델, nil, 음수, NaN/Infinity, 천단위 콤마, 반올림)
 ```
 
@@ -303,4 +303,4 @@ CREATE TABLE requests (
 | `decodeProjectPath` / `projectDisplayName` (conversation.go) | encoded CWD 를 파일 시스템 stat 으로 복원 — 세그먼트 단위 lookahead 로 하이픈 포함 폴더명(`claude-code-proxy`) 을 정확히 복원. 디스크에 프로젝트가 없으면 remainder 그대로 반환. `GetProjects` 호출마다 stat 발생(캐시 없음), stub `existsFn` 주입 가능(`projectDisplayNameWith`) |
 | `HorizontalSplit.tsx` mousemove/mouseup 리스너 정리 | `onMouseDown` 이 `window` 레벨 리스너 등록 → `onUp` 에서 반드시 제거 + 언마운트 cleanup 으로 body `userSelect/cursor` 복원. 누락 시 드래그 종료 후에도 커서가 `col-resize` 에 고정 / 메모리 누수 |
 | Split 상태 영속화 금지 | 요구사항상 localStorage/쿠키/서버 저장 없이 매 세션 디폴트로 복귀. `HorizontalSplit` 는 `defaultLeftWidth=420` 로 마운트 시 리셋 — 변경 시 UX 회귀 주의 |
-| 가격표 동기화 (`pricing.go` ↔ `pricing.ts`) | USD/Million 단가 테이블은 Go 백엔드(`proxy/internal/service/pricing.go`)와 TS 프론트(`web/app/utils/pricing.ts`) 두 곳에 중복 선언됨 — 한쪽만 갱신하면 `/api/sessions.totalCost` 와 Request 카드 개별 비용이 서로 다른 값을 표시. 모델 매칭은 **정확 일치**만 허용(prefix 금지), 가격 추가/수정 시 양쪽 동시 수정 + 양쪽 단위 테스트 갱신 |
+| 가격표 동기화 (`pricing.go` ↔ `pricing.ts`) | USD/Million 단가 테이블은 Go 백엔드(`proxy/internal/service/pricing.go`)와 TS 프론트(`web/app/utils/pricing.ts`) 두 곳에 중복 선언됨 — 한쪽만 갱신하면 `/api/sessions.totalCost` 와 Request 카드 개별 비용이 서로 다른 값을 표시. 모델 매칭은 **정확 일치 + dated alias(`-YYYYMMDD`) 정규화**만 허용(prefix 매칭 금지). 가격 추가/수정 시 양쪽 동시 수정 + 양쪽 단위 테스트 갱신, 정규화 정책 변경 시도 양쪽 동기화 |

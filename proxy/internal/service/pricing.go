@@ -1,6 +1,8 @@
 package service
 
 import (
+	"regexp"
+
 	"github.com/seifghazi/claude-code-monitor/internal/model"
 )
 
@@ -15,8 +17,9 @@ type modelPricing struct {
 }
 
 // pricingTable is the single source of truth for Anthropic model pricing
-// used by the proxy. Matching is strictly by exact model id — no prefix
-// matching. Keep this in sync with web/app/utils/pricing.ts.
+// used by the proxy. Matching is by exact model id — no prefix matching —
+// after stripping a trailing "-YYYYMMDD" dated alias (see normalizeModelID).
+// Keep this in sync with web/app/utils/pricing.ts.
 //
 // Source: https://platform.claude.com/docs/en/about-claude/pricing
 var pricingTable = map[string]modelPricing{
@@ -50,6 +53,28 @@ var pricingTable = map[string]modelPricing{
 	},
 }
 
+// datedAliasSuffix matches a trailing "-YYYYMMDD" snapshot alias appended to
+// a base model ID by Claude Code (e.g. "claude-haiku-4-5-20251001"). Only an
+// exact 8-digit date is accepted — arbitrary suffixes like "-beta" must NOT
+// match, since pricing lookup is exact-match on the base ID.
+var datedAliasSuffix = regexp.MustCompile(`-[0-9]{8}$`)
+
+// normalizeModelID strips a trailing "-YYYYMMDD" dated alias when, and only
+// when, doing so yields a base ID present in pricingTable. Otherwise the
+// input is returned unchanged so unsupported/unknown IDs still fail lookup.
+func normalizeModelID(modelID string) string {
+	if _, ok := pricingTable[modelID]; ok {
+		return modelID
+	}
+	stripped := datedAliasSuffix.ReplaceAllString(modelID, "")
+	if stripped != modelID {
+		if _, ok := pricingTable[stripped]; ok {
+			return stripped
+		}
+	}
+	return modelID
+}
+
 // tokensToUSD converts a token count to a USD amount given a per-million-token price.
 func tokensToUSD(tokens int, pricePerMillion float64) float64 {
 	if tokens <= 0 {
@@ -61,8 +86,11 @@ func tokensToUSD(tokens int, pricePerMillion float64) float64 {
 // CalculateCostUSD returns the USD cost of a single (model, usage) pair.
 //
 // Matching rules:
-//   - modelID must appear in pricingTable via exact match (no prefix matching);
-//     otherwise ok=false.
+//   - modelID must resolve to an entry in pricingTable. A trailing
+//     "-YYYYMMDD" dated alias is stripped (e.g. claude-haiku-4-5-20251001 →
+//     claude-haiku-4-5) before lookup; otherwise matching is exact (no prefix
+//     matching). If neither the original nor the normalized id matches,
+//     ok=false.
 //   - If usage is nil, ok=false.
 //
 // Cache write distribution:
@@ -78,7 +106,7 @@ func CalculateCostUSD(modelID string, u *model.AnthropicUsage) (float64, bool) {
 	if u == nil {
 		return 0, false
 	}
-	price, known := pricingTable[modelID]
+	price, known := pricingTable[normalizeModelID(modelID)]
 	if !known {
 		return 0, false
 	}

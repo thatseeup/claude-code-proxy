@@ -126,7 +126,10 @@ func TestCalculateCostUSD_UnsupportedModels(t *testing.T) {
 		"claude-sonnet-4-5",   // not in our table
 		"gpt-4",               // different provider
 		"",                    // empty
-		"claude-opus-4-7-beta", // prefix match must NOT work
+		"claude-opus-4-7-beta",     // arbitrary suffix must NOT match
+		"claude-opus-4-5-20251001", // dated alias of an unsupported base
+		"claude-haiku-4-5-2025101",  // 7-digit suffix — not a valid YYYYMMDD
+		"claude-haiku-4-5-202510011", // 9-digit suffix — not a valid YYYYMMDD
 	}
 	usage := &model.AnthropicUsage{InputTokens: 1000, OutputTokens: 100}
 	for _, id := range cases {
@@ -136,6 +139,34 @@ func TestCalculateCostUSD_UnsupportedModels(t *testing.T) {
 		}
 		if got != 0 {
 			t.Fatalf("unsupported model %q: expected cost=0, got %v", id, got)
+		}
+	}
+}
+
+func TestCalculateCostUSD_DatedAliasNormalizesToBaseID(t *testing.T) {
+	// Claude Code emits dated aliases like "claude-haiku-4-5-20251001".
+	// They must price identically to the base id "claude-haiku-4-5".
+	usage := &model.AnthropicUsage{
+		InputTokens:  1_000_000,
+		OutputTokens: 1_000_000,
+	}
+	base, okBase := CalculateCostUSD("claude-haiku-4-5", usage)
+	dated, okDated := CalculateCostUSD("claude-haiku-4-5-20251001", usage)
+	if !okBase || !okDated {
+		t.Fatalf("expected ok=true for both base and dated alias, got base=%v dated=%v", okBase, okDated)
+	}
+	if !approxEqual(base, dated) {
+		t.Fatalf("dated alias should equal base price: base=%v dated=%v", base, dated)
+	}
+
+	// Spot-check the other base IDs accept dated aliases too.
+	for _, id := range []string{
+		"claude-opus-4-7-20260101",
+		"claude-opus-4-6-20251231",
+		"claude-sonnet-4-6-20251015",
+	} {
+		if _, ok := CalculateCostUSD(id, usage); !ok {
+			t.Fatalf("dated alias %q should match its base id", id)
 		}
 	}
 }
