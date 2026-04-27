@@ -48,8 +48,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // Avoid refetching the sessions list (which scans every response body to
 // aggregate cost) on every request-row click. Row selection only changes
 // `?rid=` — the parent's data doesn't depend on it. We still revalidate when
-// the pathname changes (session switch) or when an action runs (e.g. session
-// delete fetcher, explicit revalidator.revalidate()).
+// the pathname changes (session switch), an action runs (session delete
+// fetcher), or the user explicitly triggers `revalidator.revalidate()`
+// (reload button). Explicit revalidation is detected by identical URLs —
+// navigation always changes at least the search string.
 export function shouldRevalidate({
   currentUrl,
   nextUrl,
@@ -62,6 +64,9 @@ export function shouldRevalidate({
   formAction?: string;
 }) {
   if (formAction) return defaultShouldRevalidate;
+  if (currentUrl.toString() === nextUrl.toString()) {
+    return defaultShouldRevalidate;
+  }
   if (currentUrl.pathname === nextUrl.pathname) return false;
   return defaultShouldRevalidate;
 }

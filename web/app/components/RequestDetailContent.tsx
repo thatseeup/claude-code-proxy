@@ -84,12 +84,21 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
     // conversation: true
   });
   const [copied, setCopied] = useState<Record<string, boolean>>({});
+  const [selectedToolIndex, setSelectedToolIndex] = useState<number | null>(null);
 
   const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
+    setExpandedSections(prev => {
+      const next = { ...prev, [section]: !prev[section] };
+      if (section === 'tools' && next.tools) {
+        setSelectedToolIndex(null);
+      }
+      return next;
+    });
+  };
+
+  const toggleToolChip = (index: number) => {
+    setSelectedToolIndex(prev => (prev === index ? null : index));
+    setExpandedSections(prev => (prev.tools ? { ...prev, tools: false } : prev));
   };
 
   const handleCopy = async (content: string, key: string) => {
@@ -285,40 +294,62 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
           {/* Tools */}
           {request.body.tools && request.body.tools.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div
-                className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
-                onClick={() => toggleSection('tools')}
-              >
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-                    <Wrench className="w-5 h-5 text-indigo-600" />
-                    <span>Available Tools</span>
-                    <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-200">
-                      {request.body.tools.length} tools
-                    </span>
-                  </h4>
-                  <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
-                    expandedSections.tools ? 'rotate-180' : ''
-                  }`} />
+              <div className="bg-gray-50 border-b border-gray-200">
+                <div
+                  className="px-6 py-4 cursor-pointer"
+                  onClick={() => toggleSection('tools')}
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                      <Wrench className="w-5 h-5 text-indigo-600" />
+                      <span>Available Tools</span>
+                      <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full border border-indigo-200">
+                        {request.body.tools.length} tools
+                      </span>
+                    </h4>
+                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                      expandedSections.tools ? 'rotate-180' : ''
+                    }`} />
+                  </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {request.body.tools.map((tool, index) => (
-                    <span
-                      key={index}
-                      className="text-xs font-mono bg-white text-gray-700 border border-gray-200 px-2 py-0.5 rounded-full"
-                    >
-                      {tool.name}
-                    </span>
-                  ))}
+                <div className="px-6 pb-4 flex flex-wrap gap-1.5">
+                  {request.body.tools.map((tool, index) => {
+                    const isSelected = selectedToolIndex === index;
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleToolChip(index);
+                        }}
+                        className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:text-indigo-700'
+                        }`}
+                        aria-pressed={isSelected}
+                      >
+                        {tool.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              {expandedSections.tools && (
+              {expandedSections.tools ? (
                 <div className="p-6 space-y-4">
                   {request.body.tools.map((tool, index) => (
                     <ToolCard key={index} tool={tool} index={index} />
                   ))}
                 </div>
-              )}
+              ) : selectedToolIndex !== null && request.body.tools[selectedToolIndex] ? (
+                <div className="p-6">
+                  <ToolCard
+                    tool={request.body.tools[selectedToolIndex]}
+                    index={selectedToolIndex}
+                  />
+                </div>
+              ) : null}
             </div>
           )}
 
