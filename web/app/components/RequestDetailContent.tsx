@@ -85,12 +85,16 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
   });
   const [copied, setCopied] = useState<Record<string, boolean>>({});
   const [selectedToolIndex, setSelectedToolIndex] = useState<number | null>(null);
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number | null>(null);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => {
       const next = { ...prev, [section]: !prev[section] };
       if (section === 'tools' && next.tools) {
         setSelectedToolIndex(null);
+      }
+      if (section === 'conversation' && next.conversation) {
+        setSelectedMessageIndex(null);
       }
       return next;
     });
@@ -99,6 +103,11 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
   const toggleToolChip = (index: number) => {
     setSelectedToolIndex(prev => (prev === index ? null : index));
     setExpandedSections(prev => (prev.tools ? { ...prev, tools: false } : prev));
+  };
+
+  const toggleMessageChip = (index: number) => {
+    setSelectedMessageIndex(prev => (prev === index ? null : index));
+    setExpandedSections(prev => (prev.conversation ? { ...prev, conversation: false } : prev));
   };
 
   const handleCopy = async (content: string, key: string) => {
@@ -354,32 +363,64 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
           )}
 
           {/* Conversation */}
-          {request.body.messages && (
+          {request.body.messages && request.body.messages.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div 
-                className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
-                onClick={() => toggleSection('conversation')}
-              >
-                <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-                    <MessageCircle className="w-5 h-5 text-blue-600" />
-                    <span>Conversation</span>
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
-                      {request.body.messages.length} messages
-                    </span>
-                  </h4>
-                  <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
-                    expandedSections.conversation ? 'rotate-180' : ''
-                  }`} />
+              <div className="bg-gray-50 border-b border-gray-200">
+                <div
+                  className="px-6 py-4 cursor-pointer"
+                  onClick={() => toggleSection('conversation')}
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                      <MessageCircle className="w-5 h-5 text-blue-600" />
+                      <span>Conversation</span>
+                      <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
+                        {request.body.messages.length} messages
+                      </span>
+                    </h4>
+                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                      expandedSections.conversation ? 'rotate-180' : ''
+                    }`} />
+                  </div>
+                </div>
+                <div className="px-6 pb-4 flex flex-wrap gap-1.5">
+                  {request.body.messages.map((_, index) => {
+                    const isSelected = selectedMessageIndex === index;
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMessageChip(index);
+                        }}
+                        className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700'
+                        }`}
+                        aria-pressed={isSelected}
+                      >
+                        {index + 1}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              {expandedSections.conversation && (
+              {expandedSections.conversation ? (
                 <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
                   {request.body.messages.map((message, index) => (
                     <MessageBubble key={index} message={message} index={index} />
                   ))}
                 </div>
-              )}
+              ) : selectedMessageIndex !== null && request.body.messages[selectedMessageIndex] ? (
+                <div className="p-6">
+                  <MessageBubble
+                    message={request.body.messages[selectedMessageIndex]}
+                    index={selectedMessageIndex}
+                  />
+                </div>
+              ) : null}
             </div>
           )}
 
