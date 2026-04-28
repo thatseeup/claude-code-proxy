@@ -429,11 +429,21 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                   ))}
                 </div>
               ) : selectedMessageIndex !== null && request.body.messages[selectedMessageIndex] ? (
-                <div className="p-6">
+                <div className="p-6 space-y-4">
                   <MessageBubble
                     message={request.body.messages[selectedMessageIndex]}
                     index={selectedMessageIndex}
                   />
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="text-sm font-medium text-gray-700 mb-2">Raw</div>
+                    <CollapsibleJSON
+                      json={extractRawMessageJSON(
+                        request.bodyRaw,
+                        selectedMessageIndex,
+                        request.body.messages[selectedMessageIndex],
+                      )}
+                    />
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -533,6 +543,32 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
       )}
     </div>
   );
+}
+
+// Extract a single message from the request's raw body string and pretty-print it.
+// Why use bodyRaw instead of request.body.messages[index]: the Go backend
+// re-marshals body via map[string]interface{}, which does not guarantee key
+// order. The raw string preserves the original wire order, and JSON.parse
+// preserves insertion order for non-numeric string keys, so a parse →
+// stringify(pretty) round-trip keeps the original order. Falls back to the
+// already-parsed object if the raw string is missing or malformed.
+function extractRawMessageJSON(
+  bodyRaw: string | undefined,
+  index: number,
+  fallback: any,
+): string {
+  if (bodyRaw) {
+    try {
+      const parsed = JSON.parse(bodyRaw);
+      const msg = parsed?.messages?.[index];
+      if (msg !== undefined) {
+        return JSON.stringify(msg, null, 2);
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return formatJSON(fallback);
 }
 
 // Returns true when message.content is an array containing at least one
@@ -1026,7 +1062,7 @@ function CollapsibleJSON({ json }: { readonly json: string }) {
           onClick={() => setExpanded(v => !v)}
           className="mt-1 text-xs text-blue-600 hover:text-blue-800 font-medium border border-blue-200 bg-blue-50 px-2 py-0.5 rounded"
         >
-          {expanded ? 'Show less' : '(...)'}
+          {expanded ? 'Show less' : '...'}
         </button>
       )}
     </div>
