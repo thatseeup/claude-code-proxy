@@ -384,8 +384,26 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                   </div>
                 </div>
                 <div className="px-6 pb-4 flex flex-wrap gap-1.5">
-                  {request.body.messages.map((_, index) => {
+                  {request.body.messages.map((message, index) => {
                     const isSelected = selectedMessageIndex === index;
+                    const isUser = message.role === 'user';
+                    const hasUserText = isUser && messageHasTextBlock(message);
+                    let className = 'text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ';
+                    if (isSelected) {
+                      if (hasUserText) {
+                        className += 'bg-amber-600 text-white border-amber-600 shadow-sm ring-2 ring-amber-300 font-bold';
+                      } else if (isUser) {
+                        className += 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-200';
+                      } else {
+                        className += 'bg-blue-600 text-white border-blue-600 shadow-sm';
+                      }
+                    } else if (hasUserText) {
+                      className += 'bg-amber-500 text-white border-amber-600 font-bold hover:bg-amber-600 hover:border-amber-700';
+                    } else if (isUser) {
+                      className += 'bg-white text-blue-700 border-blue-400 hover:border-blue-500 hover:bg-blue-50';
+                    } else {
+                      className += 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700';
+                    }
                     return (
                       <button
                         key={index}
@@ -394,12 +412,9 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                           e.stopPropagation();
                           toggleMessageChip(index);
                         }}
-                        className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700'
-                        }`}
+                        className={className}
                         aria-pressed={isSelected}
+                        title={message.role}
                       >
                         {index + 1}
                       </button>
@@ -518,6 +533,15 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
       )}
     </div>
   );
+}
+
+// Returns true when message.content is an array containing at least one
+// block whose type === "text". String content does not count — chip
+// emphasis is for explicit text blocks alongside tool_result/image blocks.
+function messageHasTextBlock(message: any): boolean {
+  const content = message?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some((block: any) => block?.type === 'text');
 }
 
 // Message bubble component
