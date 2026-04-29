@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { 
-  ChevronDown, 
-  Info, 
-  Settings, 
-  Cpu, 
-  MessageCircle, 
-  Brain, 
-  User, 
-  Bot, 
+import {
+  ChevronDown,
+  Info,
+  Settings,
+  Cpu,
+  MessageCircle,
+  Brain,
+  User,
+  Bot,
   Target,
   Copy,
   Check,
@@ -15,7 +15,8 @@ import {
   Wifi,
   List,
   FileText,
-  Wrench
+  Wrench,
+  Download
 } from 'lucide-react';
 import { MessageContent } from './MessageContent';
 import { formatJSON, formatRawHeaders, formatStableDateTime } from '../utils/formatters';
@@ -120,6 +121,55 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);
     }
+  };
+
+  const triggerDownload = (content: string, filename: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const parseSystemArray = (): any[] | null => {
+    if (!request.bodyRaw) return null;
+    try {
+      const parsed = JSON.parse(request.bodyRaw);
+      if (!parsed || !Array.isArray(parsed.system)) return null;
+      return parsed.system;
+    } catch {
+      return null;
+    }
+  };
+
+  const requestDateStamp = (): string => {
+    const ts = new Date(request.timestamp);
+    const yyyy = ts.getFullYear();
+    const mm = String(ts.getMonth() + 1).padStart(2, '0');
+    const dd = String(ts.getDate()).padStart(2, '0');
+    return `${yyyy}${mm}${dd}`;
+  };
+
+  const handleDownloadSystem = () => {
+    const system = parseSystemArray();
+    if (!system) return;
+    const payload = JSON.stringify({ system }, null, 2);
+    const filename = `claude-code-system-${requestDateStamp()}.json`;
+    triggerDownload(payload, filename, 'application/json');
+  };
+
+  const handleDownloadSystemMarkdown = () => {
+    const system = parseSystemArray();
+    if (!system || system.length === 0) return;
+    const last = system[system.length - 1];
+    const text = typeof last?.text === 'string' ? last.text : '';
+    if (!text) return;
+    const filename = `claude-code-system-${requestDateStamp()}.md`;
+    triggerDownload(text, filename, 'text/markdown');
   };
 
   const canGradeRequest = (request: Request) => {
@@ -273,9 +323,37 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                       {request.body.system.length} items
                     </span>
                   </h4>
-                  <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
-                    expandedSections.system ? 'rotate-180' : ''
-                  }`} />
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadSystem();
+                      }}
+                      disabled={!request.bodyRaw}
+                      className="p-1 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                      title="Download system as JSON"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="text-xs font-medium">JSON</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownloadSystemMarkdown();
+                      }}
+                      disabled={!request.bodyRaw}
+                      className="p-1 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+                      title="Download last system text as Markdown"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="text-xs font-medium">MD</span>
+                    </button>
+                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                      expandedSections.system ? 'rotate-180' : ''
+                    }`} />
+                  </div>
                 </div>
               </div>
               {expandedSections.system && (
