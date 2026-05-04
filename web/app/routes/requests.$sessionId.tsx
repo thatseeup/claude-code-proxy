@@ -1,5 +1,4 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
 import {
   Link,
   useFetcher,
@@ -77,13 +76,14 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     console.error("Failed to load session requests:", err);
   }
 
-  return json<LoaderData>({
+  const data: LoaderData = {
     requests,
     total,
     sessionIdToken,
     modelFilter,
     projectFilter,
-  });
+  };
+  return data;
 }
 
 // Don't refetch the (large) list when only `?rid=` changes — row selection only
@@ -420,7 +420,7 @@ interface AnthropicUsageShape {
   cache_read_input_tokens?: number;
 }
 
-function UsageLine({ usage }: { usage?: AnthropicUsageShape }) {
+function UsageLine({ usage }: Readonly<{ usage?: AnthropicUsageShape }>) {
   if (!usage) return <span />;
   const input = usage.input_tokens ?? 0;
   const cacheCreation = usage.cache_creation_input_tokens ?? 0;
@@ -795,7 +795,7 @@ export default function RequestsForSession() {
               // RequestDetailContent expects `id` as number — re-use requestId
               // string; its usage is only for onGrade / display keys.
               id: selected.requestId as unknown as number,
-            } as any
+            } as unknown as Parameters<typeof RequestDetailContent>[0]["request"]
           }
           onGrade={() => {
             /* grading UI out of scope for this step */
