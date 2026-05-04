@@ -189,6 +189,19 @@ function isStreamRequest(body: any): boolean {
   return body?.stream === true;
 }
 
+function turnNumber(body: unknown): number | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as { messages?: unknown; messages_count?: unknown };
+  let count = 0;
+  if (typeof b.messages_count === "number") {
+    count = b.messages_count;
+  } else if (Array.isArray(b.messages)) {
+    count = b.messages.length;
+  }
+  if (count <= 0) return null;
+  return Math.floor((count + 1) / 2);
+}
+
 function hitRatioChipClass(ratio: number): string {
   if (ratio >= 0.9)
     return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
@@ -681,6 +694,15 @@ export default function RequestsForSession() {
                   </div>
                   <div className="flex items-center justify-between gap-2 mb-1 leading-none text-xs">
                     <div className="flex items-center flex-wrap gap-1.5 min-w-0">
+                      {(() => {
+                        const turn = turnNumber(req.body);
+                        if (turn === null) return null;
+                        return (
+                          <span className="px-1.5 py-0.5 rounded font-semibold tabular-nums bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                            #{turn}
+                          </span>
+                        );
+                      })()}
                       {req.body && !isStreamRequest(req.body) && (
                         <span className="px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                           Non-Stream

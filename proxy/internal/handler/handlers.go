@@ -307,6 +307,7 @@ func summarizeRequestBody(raw string) interface{} {
 			start = 0
 		}
 		out["messages"] = parsed.Messages[start:n]
+		out["messages_count"] = n
 	}
 	// Keep the first three system entries so that classifySession on the client can
 	// inspect system[2] (which on this Claude Code build holds the "You are an interactive
