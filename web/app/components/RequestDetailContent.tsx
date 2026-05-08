@@ -13,7 +13,6 @@ import {
   Check,
   ArrowLeftRight,
   Wifi,
-  List,
   FileText,
   Wrench,
   Download
@@ -720,9 +719,7 @@ function PromptGradingResults({ promptGrade }: { promptGrade: any }) {
 
 // Response Details Component
 function ResponseDetails({ response }: { response: NonNullable<Request['response']> }) {
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    overview: true
-  });
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState<Record<string, boolean>>({});
 
   const toggleSection = (section: string) => {
@@ -742,19 +739,6 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);
     }
-  };
-
-  const getStatusColor = (statusCode: number) => {
-    if (statusCode >= 200 && statusCode < 300) {
-      return { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: 'text-green-600' };
-    }
-    if (statusCode >= 400 && statusCode < 500) {
-      return { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', icon: 'text-yellow-600' };
-    }
-    if (statusCode >= 500) {
-      return { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: 'text-red-600' };
-    }
-    return { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', icon: 'text-gray-600' };
   };
 
   // Format raw SSE chunks into multiline, JSON-beautified display elements.
@@ -882,234 +866,207 @@ function ResponseDetails({ response }: { response: NonNullable<Request['response
     };
   };
 
-  const statusColors = getStatusColor(response.statusCode);
-
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm border-l-4 border-l-blue-500">
-      <div 
-        className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
-        onClick={() => toggleSection('overview')}
-      >
-        <div className="flex items-center justify-between">
-          <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-            <ArrowLeftRight className="w-5 h-5 text-blue-600" />
-            <span>API Response</span>
-            <span className={`text-xs px-2 py-1 rounded-full border ${statusColors.bg} ${statusColors.text} ${statusColors.border}`}>
-              {response.statusCode}
-            </span>
-          </h4>
-          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
-            expandedSections.overview ? 'rotate-180' : ''
-          }`} />
-        </div>
-      </div>
-      
-      {expandedSections.overview && (
-        <div className="p-6 space-y-6">
-          {/* Response Headers */}
-          {response.headers && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
-              <div 
-                className="px-4 py-3 border-b border-gray-200 cursor-pointer"
-                onClick={() => toggleSection('responseHeaders')}
-              >
-                <div className="flex items-center justify-between">
-                  <h5 className="text-sm font-semibold text-gray-900 flex items-center space-x-2">
-                    <List className="w-4 h-4 text-gray-600" />
-                    <span>Response Headers</span>
-                    <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-full">
-                      {Object.keys(response.headers).length}
-                    </span>
-                  </h5>
-                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
-                    expandedSections.responseHeaders ? 'rotate-180' : ''
-                  }`} />
-                </div>
-              </div>
-              {expandedSections.responseHeaders && (
-                <div className="px-4 pb-4">
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Headers</span>
-                      <button
-                        onClick={() => handleCopy(formatRawHeaders(response.headers), 'responseHeaders')}
-                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                        title="Copy response headers"
-                      >
-                        {copied.responseHeaders ? (
-                          <Check className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                    <pre className="text-sm text-gray-700 overflow-x-auto">
-                      {formatRawHeaders(response.headers)}
-                    </pre>
-                  </div>
-                </div>
-              )}
+    <>
+      {/* Response Headers */}
+      {response.headers && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+          <div
+            className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
+            onClick={() => toggleSection('responseHeaders')}
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                <Settings className="w-5 h-5 text-blue-600" />
+                <span>Response Headers</span>
+              </h4>
+              <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                expandedSections.responseHeaders ? 'rotate-180' : ''
+              }`} />
             </div>
-          )}
-
-          {/* Response Body */}
-          {(response.body || response.bodyText) && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
-              <div 
-                className="px-4 py-3 border-b border-gray-200 cursor-pointer"
-                onClick={() => toggleSection('responseBody')}
-              >
-                <div className="flex items-center justify-between">
-                  <h5 className="text-sm font-semibold text-gray-900 flex items-center space-x-2">
-                    <FileText className="w-4 h-4 text-gray-600" />
-                    <span>Response Body</span>
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
-                      {response.body ? 'JSON' : 'Text'}
-                    </span>
-                  </h5>
-                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
-                    expandedSections.responseBody ? 'rotate-180' : ''
-                  }`} />
-                </div>
-              </div>
-              {expandedSections.responseBody && (
-                <div className="px-4 pb-4">
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Response</span>
-                      <button
-                        onClick={() => handleCopy(
-                          response.body ? formatJSON(response.body) : (response.bodyText || ''), 
-                          'responseBody'
-                        )}
-                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                        title="Copy response body"
-                      >
-                        {copied.responseBody ? (
-                          <Check className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                    <CollapsibleJSON json={response.body ? formatJSON(response.body) : (response.bodyText || '')} />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Streaming Response */}
-          {response.isStreaming && response.streamingChunks && response.streamingChunks.length > 0 && (() => {
-            const parsed = parseStreamingResponse(response.streamingChunks);
-            return (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
-                <div 
-                  className="px-4 py-3 border-b border-gray-200 cursor-pointer"
-                  onClick={() => toggleSection('streamingResponse')}
-                >
-                  <div className="flex items-center justify-between">
-                    <h5 className="text-sm font-semibold text-gray-900 flex items-center space-x-2">
-                      <Wifi className="w-4 h-4 text-gray-600" />
-                      <span>Streaming Response</span>
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
-                        {response.streamingChunks.length} chunks
-                      </span>
-                      {parsed.isFormatted && (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full border border-green-200">
-                          Parsed
-                        </span>
-                      )}
-                    </h5>
-                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
-                      expandedSections.streamingResponse ? 'rotate-180' : ''
-                    }`} />
-                  </div>
-                </div>
-                {expandedSections.streamingResponse && (
-                  <div className="px-4 pb-4 space-y-3">
-                    {/* Clean Parsed Response */}
-                    {parsed.isFormatted && (
-                      <div className="bg-white rounded-lg p-4 border border-green-200">
-                        <div className="flex items-center justify-between mb-3">
-                          <h6 className="text-sm font-semibold text-green-900 flex items-center space-x-2">
-                            <Check className="w-4 h-4" />
-                            <span>Final Response (Clean)</span>
-                          </h6>
-                          <button
-                            onClick={() => handleCopy(parsed.finalText, 'streamingClean')}
-                            className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                            title="Copy clean response"
-                          >
-                            {copied.streamingClean ? (
-                              <Check className="w-4 h-4 text-green-600" />
-                            ) : (
-                              <Copy className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                        <div className="bg-gray-50 rounded p-3 border border-gray-200">
-                          <pre className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
-                            {parsed.finalText}
-                          </pre>
-                        </div>
-                        <div className="mt-2 text-xs text-green-600">
-                          Extracted clean text from streaming chunks
-                        </div>
-                      </div>
+          </div>
+          {expandedSections.responseHeaders && (
+            <div className="p-6">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Headers</span>
+                  <button
+                    onClick={() => handleCopy(formatRawHeaders(response.headers), 'responseHeaders')}
+                    className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                    title="Copy response headers"
+                  >
+                    {copied.responseHeaders ? (
+                      <Check className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
                     )}
+                  </button>
+                </div>
+                <pre className="text-sm text-gray-700 overflow-x-auto">
+                  {formatRawHeaders(response.headers)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-                    {/* Raw Data (Collapsible) */}
-                    <div className="bg-gray-50 rounded-lg border border-gray-200">
-                      <div 
-                        className="px-3 py-2 cursor-pointer flex items-center justify-between"
-                        onClick={() => toggleSection('rawStreamingData')}
+      {/* Response Body */}
+      {(response.body || response.bodyText) && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+          <div
+            className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
+            onClick={() => toggleSection('responseBody')}
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <span>Response Body</span>
+                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
+                  {response.body ? 'JSON' : 'Text'}
+                </span>
+              </h4>
+              <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                expandedSections.responseBody ? 'rotate-180' : ''
+              }`} />
+            </div>
+          </div>
+          {expandedSections.responseBody && (
+            <div className="p-6">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Body</span>
+                  <button
+                    onClick={() => handleCopy(
+                      response.body ? formatJSON(response.body) : (response.bodyText || ''),
+                      'responseBody'
+                    )}
+                    className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                    title="Copy response body"
+                  >
+                    {copied.responseBody ? (
+                      <Check className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                <CollapsibleJSON json={response.body ? formatJSON(response.body) : (response.bodyText || '')} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Streaming Response */}
+      {response.isStreaming && response.streamingChunks && response.streamingChunks.length > 0 && (() => {
+        const parsed = parseStreamingResponse(response.streamingChunks);
+        return (
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div
+              className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
+              onClick={() => toggleSection('streamingResponse')}
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                  <Wifi className="w-5 h-5 text-blue-600" />
+                  <span>Streaming Response</span>
+                  <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
+                    {response.streamingChunks.length} chunks
+                  </span>
+                  {parsed.isFormatted && (
+                    <span className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded-full border border-green-200">
+                      Parsed
+                    </span>
+                  )}
+                </h4>
+                <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                  expandedSections.streamingResponse ? 'rotate-180' : ''
+                }`} />
+              </div>
+            </div>
+            {expandedSections.streamingResponse && (
+              <div className="p-6 space-y-3">
+                {/* Clean Parsed Response */}
+                {parsed.isFormatted && (
+                  <div className="bg-white rounded-lg p-4 border border-green-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h6 className="text-sm font-semibold text-green-900 flex items-center space-x-2">
+                        <Check className="w-4 h-4" />
+                        <span>Final Response (Clean)</span>
+                      </h6>
+                      <button
+                        onClick={() => handleCopy(parsed.finalText, 'streamingClean')}
+                        className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                        title="Copy clean response"
                       >
-                        <span className="text-sm font-medium text-gray-700 flex items-center space-x-2">
-                          <FileText className="w-4 h-4" />
-                          <span>Raw Streaming Data</span>
-                        </span>
-                        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
-                          expandedSections.rawStreamingData ? 'rotate-180' : ''
-                        }`} />
-                      </div>
-                      {expandedSections.rawStreamingData && (
-                        <div className="px-3 pb-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-gray-600">SSE Events & Metadata</span>
-                            <button
-                              onClick={() => handleCopy(parsed.rawData, 'streamingRaw')}
-                              className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                              title="Copy raw data"
-                            >
-                              {copied.streamingRaw ? (
-                                <Check className="w-3 h-3 text-green-600" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                            </button>
-                          </div>
-                          <div className="text-xs text-gray-600 overflow-x-auto max-h-96 overflow-y-auto bg-gray-100 rounded p-2 font-mono">
-                            {formatSSELines(response.streamingChunks)}
-                          </div>
-                        </div>
-                      )}
+                        {copied.streamingClean ? (
+                          <Check className="w-4 h-4 text-green-600" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
                     </div>
-
-                    <div className="text-xs text-gray-500">
-                      {parsed.isFormatted 
-                        ? `Successfully parsed ${response.streamingChunks.length} streaming chunks`
-                        : `Raw display of ${response.streamingChunks.length} streaming chunks (parsing failed)`
-                      }
+                    <div className="bg-gray-50 rounded p-3 border border-gray-200">
+                      <pre className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">
+                        {parsed.finalText}
+                      </pre>
+                    </div>
+                    <div className="mt-2 text-xs text-green-600">
+                      Extracted clean text from streaming chunks
                     </div>
                   </div>
                 )}
+
+                {/* Raw Data (Collapsible) */}
+                <div className="bg-gray-50 rounded-lg border border-gray-200">
+                  <div
+                    className="px-3 py-2 cursor-pointer flex items-center justify-between"
+                    onClick={() => toggleSection('rawStreamingData')}
+                  >
+                    <span className="text-sm font-medium text-gray-700 flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Raw Streaming Data</span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
+                      expandedSections.rawStreamingData ? 'rotate-180' : ''
+                    }`} />
+                  </div>
+                  {expandedSections.rawStreamingData && (
+                    <div className="px-3 pb-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-gray-600">SSE Events & Metadata</span>
+                        <button
+                          onClick={() => handleCopy(parsed.rawData, 'streamingRaw')}
+                          className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                          title="Copy raw data"
+                        >
+                          {copied.streamingRaw ? (
+                            <Check className="w-3 h-3 text-green-600" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-600 overflow-x-auto max-h-96 overflow-y-auto bg-gray-100 rounded p-2 font-mono">
+                        {formatSSELines(response.streamingChunks)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-xs text-gray-500">
+                  {parsed.isFormatted
+                    ? `Successfully parsed ${response.streamingChunks.length} streaming chunks`
+                    : `Raw display of ${response.streamingChunks.length} streaming chunks (parsing failed)`
+                  }
+                </div>
               </div>
-            );
-          })()}
-        </div>
-      )}
-    </div>
+            )}
+          </div>
+        );
+      })()}
+    </>
   );
 }
 
