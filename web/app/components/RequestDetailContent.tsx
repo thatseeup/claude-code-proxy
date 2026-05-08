@@ -85,7 +85,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
   });
   const [copied, setCopied] = useState<Record<string, boolean>>({});
   const [selectedToolIndex, setSelectedToolIndex] = useState<number | null>(null);
-  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number | null>(null);
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number | 'R' | null>(null);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => {
@@ -105,10 +105,19 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
     setExpandedSections(prev => (prev.tools ? { ...prev, tools: false } : prev));
   };
 
-  const toggleMessageChip = (index: number) => {
+  const toggleMessageChip = (index: number | 'R') => {
     setSelectedMessageIndex(prev => (prev === index ? null : index));
     setExpandedSections(prev => (prev.conversation ? { ...prev, conversation: false } : prev));
   };
+
+  // Extract assistant message from response body for the trailing "R" chip.
+  // Streaming responses are reassembled server-side into the same shape, so we
+  // can rely on response.body having { role, content[] } when present.
+  const responseBody: any = request.response?.body;
+  const responseMessage =
+    responseBody && typeof responseBody === 'object' && Array.isArray(responseBody.content)
+      ? { role: responseBody.role || 'assistant', content: responseBody.content }
+      : null;
 
   const handleCopy = async (content: string, key: string) => {
     try {
@@ -220,93 +229,133 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
         )}
       </div>
 
-      {/* Headers */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-        <div 
-          className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
-          onClick={() => toggleSection('headers')}
-        >
-          <div className="flex items-center justify-between">
-            <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-              <Settings className="w-5 h-5 text-blue-600" />
-              <span>Request Headers</span>
-            </h4>
-            <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
-              expandedSections.headers ? 'rotate-180' : ''
-            }`} />
-          </div>
-        </div>
-        {expandedSections.headers && (
-          <div className="p-6">
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Headers</span>
-                <button
-                  onClick={() => handleCopy(formatRawHeaders(request.headers), 'headers')}
-                  className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                  title="Copy headers"
-                >
-                  {copied.headers ? (
-                    <Check className="w-4 h-4 text-green-600" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
-              <pre className="text-sm text-gray-700 overflow-x-auto">
-                {formatRawHeaders(request.headers)}
-              </pre>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Request Body (Raw) */}
-      {request.bodyRaw && (() => {
-        const prettyBody = beautifyRawJSON(request.bodyRaw);
-        return (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-            <div
-              className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
-              onClick={() => toggleSection('requestBody')}
-            >
-              <div className="flex items-center justify-between">
-                <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  <span>Request Body</span>
-                </h4>
-                <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
-                  expandedSections.requestBody ? 'rotate-180' : ''
-                }`} />
-              </div>
-            </div>
-            {expandedSections.requestBody && (
-              <div className="p-6">
-                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Body</span>
-                    <button
-                      onClick={() => handleCopy(prettyBody, 'requestBody')}
-                      className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                      title="Copy request body"
-                    >
-                      {copied.requestBody ? (
-                        <Check className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                  <CollapsibleJSON json={prettyBody} />
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
       {request.body && (
         <>
+          {/* Conversation */}
+          {request.body.messages && request.body.messages.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-gray-50 border-b border-gray-200">
+                <div
+                  className="px-6 py-4 cursor-pointer"
+                  onClick={() => toggleSection('conversation')}
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                      <MessageCircle className="w-5 h-5 text-blue-600" />
+                      <span>Conversation</span>
+                      <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
+                        {request.body.messages.length} messages{responseMessage ? ' + Response message' : ''}
+                      </span>
+                    </h4>
+                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                      expandedSections.conversation ? 'rotate-180' : ''
+                    }`} />
+                  </div>
+                </div>
+                <div className="px-6 pb-4 flex flex-wrap gap-1.5">
+                  {request.body.messages.map((message, index) => {
+                    const isSelected = selectedMessageIndex === index;
+                    const isUser = message.role === 'user';
+                    const hasUserText = isUser && messageHasTextBlock(message);
+                    let className = 'text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ';
+                    if (isSelected) {
+                      if (hasUserText) {
+                        className += 'bg-amber-600 text-white border-amber-600 shadow-sm ring-2 ring-amber-300 font-bold';
+                      } else if (isUser) {
+                        className += 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-200';
+                      } else {
+                        className += 'bg-blue-600 text-white border-blue-600 shadow-sm';
+                      }
+                    } else if (hasUserText) {
+                      className += 'bg-amber-500 text-white border-amber-600 font-bold hover:bg-amber-600 hover:border-amber-700';
+                    } else if (isUser) {
+                      className += 'bg-white text-blue-700 border-blue-400 hover:border-blue-500 hover:bg-blue-50';
+                    } else {
+                      className += 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700';
+                    }
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMessageChip(index);
+                        }}
+                        className={className}
+                        aria-pressed={isSelected}
+                        title={message.role}
+                      >
+                        {index + 1}
+                      </button>
+                    );
+                  })}
+                  {responseMessage && (() => {
+                    const isSelected = selectedMessageIndex === 'R';
+                    const className =
+                      'text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ' +
+                      (isSelected
+                        ? 'bg-green-600 text-white border-green-600 shadow-sm ring-2 ring-green-200'
+                        : 'bg-white text-green-700 border-green-400 hover:border-green-500 hover:bg-green-50');
+                    return (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMessageChip('R');
+                        }}
+                        className={className}
+                        aria-pressed={isSelected}
+                        title={`response: ${responseMessage.role}`}
+                      >
+                        R
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+              {expandedSections.conversation ? (
+                <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
+                  {request.body.messages.map((message, index) => (
+                    <MessageBubble key={index} message={message} index={index} />
+                  ))}
+                  {responseMessage && (
+                    <MessageBubble
+                      key="R"
+                      message={responseMessage}
+                      index={request.body.messages.length}
+                      label="R"
+                    />
+                  )}
+                </div>
+              ) : selectedMessageIndex === 'R' && responseMessage ? (
+                <div className="p-6 space-y-4">
+                  <MessageBubble message={responseMessage} index={request.body.messages.length} label="R" />
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="text-sm font-medium text-gray-700 mb-2">Raw</div>
+                    <CollapsibleJSON json={formatJSON(responseMessage)} />
+                  </div>
+                </div>
+              ) : typeof selectedMessageIndex === 'number' && request.body.messages[selectedMessageIndex] ? (
+                <div className="p-6 space-y-4">
+                  <MessageBubble
+                    message={request.body.messages[selectedMessageIndex]}
+                    index={selectedMessageIndex}
+                  />
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <div className="text-sm font-medium text-gray-700 mb-2">Raw</div>
+                    <CollapsibleJSON
+                      json={extractRawMessageJSON(
+                        request.bodyRaw,
+                        selectedMessageIndex,
+                        request.body.messages[selectedMessageIndex],
+                      )}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
           {/* System Messages */}
           {request.body.system && (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -439,93 +488,6 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
             </div>
           )}
 
-          {/* Conversation */}
-          {request.body.messages && request.body.messages.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="bg-gray-50 border-b border-gray-200">
-                <div
-                  className="px-6 py-4 cursor-pointer"
-                  onClick={() => toggleSection('conversation')}
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-                      <MessageCircle className="w-5 h-5 text-blue-600" />
-                      <span>Conversation</span>
-                      <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-200">
-                        {request.body.messages.length} messages
-                      </span>
-                    </h4>
-                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
-                      expandedSections.conversation ? 'rotate-180' : ''
-                    }`} />
-                  </div>
-                </div>
-                <div className="px-6 pb-4 flex flex-wrap gap-1.5">
-                  {request.body.messages.map((message, index) => {
-                    const isSelected = selectedMessageIndex === index;
-                    const isUser = message.role === 'user';
-                    const hasUserText = isUser && messageHasTextBlock(message);
-                    let className = 'text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ';
-                    if (isSelected) {
-                      if (hasUserText) {
-                        className += 'bg-amber-600 text-white border-amber-600 shadow-sm ring-2 ring-amber-300 font-bold';
-                      } else if (isUser) {
-                        className += 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-200';
-                      } else {
-                        className += 'bg-blue-600 text-white border-blue-600 shadow-sm';
-                      }
-                    } else if (hasUserText) {
-                      className += 'bg-amber-500 text-white border-amber-600 font-bold hover:bg-amber-600 hover:border-amber-700';
-                    } else if (isUser) {
-                      className += 'bg-white text-blue-700 border-blue-400 hover:border-blue-500 hover:bg-blue-50';
-                    } else {
-                      className += 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700';
-                    }
-                    return (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleMessageChip(index);
-                        }}
-                        className={className}
-                        aria-pressed={isSelected}
-                        title={message.role}
-                      >
-                        {index + 1}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {expandedSections.conversation ? (
-                <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
-                  {request.body.messages.map((message, index) => (
-                    <MessageBubble key={index} message={message} index={index} />
-                  ))}
-                </div>
-              ) : selectedMessageIndex !== null && request.body.messages[selectedMessageIndex] ? (
-                <div className="p-6 space-y-4">
-                  <MessageBubble
-                    message={request.body.messages[selectedMessageIndex]}
-                    index={selectedMessageIndex}
-                  />
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="text-sm font-medium text-gray-700 mb-2">Raw</div>
-                    <CollapsibleJSON
-                      json={extractRawMessageJSON(
-                        request.bodyRaw,
-                        selectedMessageIndex,
-                        request.body.messages[selectedMessageIndex],
-                      )}
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
-
           {/* Model Configuration */}
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <div 
@@ -606,6 +568,91 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
               </div>
             )}
           </div>
+
+          {/* Request Headers */}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div
+              className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
+              onClick={() => toggleSection('headers')}
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                  <Settings className="w-5 h-5 text-blue-600" />
+                  <span>Request Headers</span>
+                </h4>
+                <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                  expandedSections.headers ? 'rotate-180' : ''
+                }`} />
+              </div>
+            </div>
+            {expandedSections.headers && (
+              <div className="p-6">
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Headers</span>
+                    <button
+                      onClick={() => handleCopy(formatRawHeaders(request.headers), 'headers')}
+                      className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                      title="Copy headers"
+                    >
+                      {copied.headers ? (
+                        <Check className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  <pre className="text-sm text-gray-700 overflow-x-auto">
+                    {formatRawHeaders(request.headers)}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Request Body (Raw) */}
+          {request.bodyRaw && (() => {
+            const prettyBody = beautifyRawJSON(request.bodyRaw);
+            return (
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <div
+                  className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
+                  onClick={() => toggleSection('requestBody')}
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+                      <FileText className="w-5 h-5 text-blue-600" />
+                      <span>Request Body</span>
+                    </h4>
+                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+                      expandedSections.requestBody ? 'rotate-180' : ''
+                    }`} />
+                  </div>
+                </div>
+                {expandedSections.requestBody && (
+                  <div className="p-6">
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">Body</span>
+                        <button
+                          onClick={() => handleCopy(prettyBody, 'requestBody')}
+                          className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                          title="Copy request body"
+                        >
+                          {copied.requestBody ? (
+                            <Check className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                      <CollapsibleJSON json={prettyBody} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </>
       )}
 
@@ -658,7 +705,7 @@ function messageHasTextBlock(message: any): boolean {
 }
 
 // Message bubble component
-function MessageBubble({ message, index }: { message: any; index: number }) {
+function MessageBubble({ message, index, label }: { message: any; index: number; label?: string }) {
   const roleColors = {
     'user': 'bg-blue-50 border border-blue-200',
     'assistant': 'bg-gray-50 border border-gray-200',
@@ -688,7 +735,7 @@ function MessageBubble({ message, index }: { message: any; index: number }) {
           </div>
           <span className="font-medium capitalize text-gray-900">{message.role}</span>
           <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-full border border-gray-200">
-            #{index + 1}
+            #{label ?? index + 1}
           </span>
         </div>
       </div>
