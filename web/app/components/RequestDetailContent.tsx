@@ -80,7 +80,6 @@ interface RequestDetailContentProps {
 
 export default function RequestDetailContent({ request, onGrade }: RequestDetailContentProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    overview: true,
     // conversation: true
   });
   const [copied, setCopied] = useState<Record<string, boolean>>({});
@@ -189,42 +188,40 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
 
   return (
     <div className="space-y-6">
-      {/* Request / Response Overview — side-by-side 50:50 on lg+, stacked below */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Request Overview */}
+      {/* Overview — collapsible wrapper around Request/Response Overview */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <div
-          className={`bg-white border border-gray-200 rounded-xl p-6 shadow-sm ${
-            request.response ? '' : 'lg:col-span-2'
-          }`}
+          className="bg-gray-50 px-6 py-4 border-b border-gray-200 cursor-pointer"
+          onClick={() => toggleSection('overview')}
         >
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between">
             <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
               <Info className="w-5 h-5 text-blue-600" />
-              <span>Request Overview</span>
+              <span>Overview</span>
             </h4>
-            {/* {!request.promptGrade && canGradeRequest(request) && (
-              <button
-                onClick={onGrade}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-              >
-                <Target className="w-4 h-4" />
-                <span>Grade This Prompt</span>
-              </button>
-            )} */}
+            <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${
+              expandedSections.overview ? 'rotate-180' : ''
+            }`} />
           </div>
-          <RequestOverviewTable request={request} />
         </div>
-
-        {/* Response Overview */}
-        {request.response && (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-                <ArrowLeftRight className="w-5 h-5 text-blue-600" />
-                <span>Response Overview</span>
-              </h4>
+        {expandedSections.overview && (
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h5 className="text-sm font-semibold text-gray-900 flex items-center space-x-2 mb-3">
+                <Info className="w-4 h-4 text-blue-600" />
+                <span>Request</span>
+              </h5>
+              <RequestOverviewTable request={request} />
             </div>
-            <ResponseOverviewTable response={request.response} />
+            {request.response && (
+              <div>
+                <h5 className="text-sm font-semibold text-gray-900 flex items-center space-x-2 mb-3">
+                  <ArrowLeftRight className="w-4 h-4 text-blue-600" />
+                  <span>Response</span>
+                </h5>
+                <ResponseOverviewTable response={request.response} />
+              </div>
+            )}
           </div>
         )}
       </div>
