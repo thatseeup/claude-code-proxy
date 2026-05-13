@@ -485,12 +485,16 @@ export default function RequestsForSession() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetRid]);
 
-  // Keep the previously rendered detail visible while the fetcher loads the
-  // next one. `detailFetcher.data` is the most recent successful payload
-  // (stale during the next load) — swapping to a summary / placeholder in the
-  // gap causes a visible flash, so we just hold the prior detail until the
-  // new one arrives.
-  const detail = detailFetcher.data;
+  // Hold the prior detail across loads to avoid a flash, but reject error
+  // envelopes (api.requests.$id returns `{error}` on 404 — e.g. after a
+  // session delete) and stale payloads from a previous selection.
+  // RequestDetailContent assumes `headers` exists and crashes otherwise.
+  const detail =
+    detailFetcher.data &&
+    (detailFetcher.data as { error?: unknown }).error === undefined &&
+    (detailFetcher.data as RequestLog).requestId === targetRid
+      ? detailFetcher.data
+      : undefined;
   const selected = detail ?? summarySelected;
 
   const handleModelFilter = (newFilter: string) => {

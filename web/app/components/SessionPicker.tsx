@@ -157,8 +157,34 @@ export default function SessionPicker({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [projectOpen, sessionOpen]);
 
+  const pickNextSessionToken = (): string | null => {
+    const currentGroup = groups.find((g) =>
+      g.sessions.some((s) => toUrlToken(s.sessionId) === activeSessionId),
+    );
+    if (currentGroup) {
+      const idx = currentGroup.sessions.findIndex(
+        (s) => toUrlToken(s.sessionId) === activeSessionId,
+      );
+      // Group sessions are lastTimestamp DESC: idx-1 = more recent, idx+1 = older.
+      if (idx > 0) return toUrlToken(currentGroup.sessions[idx - 1].sessionId);
+      if (idx >= 0 && idx + 1 < currentGroup.sessions.length) {
+        return toUrlToken(currentGroup.sessions[idx + 1].sessionId);
+      }
+    }
+    // `groups` is latestTimestamp DESC with the Unknown bucket pinned last.
+    const currentIdx = currentGroup ? groups.indexOf(currentGroup) : -1;
+    const neighbor =
+      (currentIdx >= 0 && groups[currentIdx + 1]) ||
+      (currentIdx > 0 && groups[currentIdx - 1]);
+    if (neighbor && neighbor.sessions.length > 0) {
+      return toUrlToken(neighbor.sessions[0].sessionId);
+    }
+    return null;
+  };
+
   const handleDelete = async () => {
     if (isDeleting) return;
+    const nextToken = pickNextSessionToken();
     setIsDeleting(true);
     try {
       const res = await fetch(
@@ -168,8 +194,16 @@ export default function SessionPicker({
       if (!res.ok) {
         throw new Error(`Failed to delete session (status ${res.status})`);
       }
+      if (nextToken) {
+        const project =
+          getActiveProjectName(nextToken, sessions) === UNKNOWN_PROJECT
+            ? ""
+            : getActiveProjectName(nextToken, sessions);
+        navigate(`/requests/${encodeURIComponent(nextToken)}${buildQuery(project)}`);
+      } else {
+        navigate("/requests");
+      }
       revalidator.revalidate();
-      navigate("/requests");
     } catch (err) {
       console.error("Failed to delete session:", err);
     } finally {
