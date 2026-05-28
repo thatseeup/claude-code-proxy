@@ -340,6 +340,26 @@ make dev
 
 On Docker, remove the mounted `./data/requests.db` file instead.
 
+### Reclaiming Disk Space After Deletion
+
+SQLite does not shrink the database file on `DELETE`. Removed rows release
+pages to an internal free-list that is reused by future inserts — the file
+size stays at its high-water mark. Deleting sessions or projects from the
+dashboard therefore frees logical space but leaves `requests.db` the same
+size on disk.
+
+To actually shrink the file, stop the proxy (or wait for an idle moment —
+`VACUUM` takes an exclusive lock) and run:
+
+```bash
+sqlite3 proxy/requests.db 'VACUUM;'   # or whatever DB_PATH points to
+```
+
+This rewrites the database into a temporary file and replaces the original,
+so make sure you have free disk space roughly equal to the current DB size.
+For typical usage the free-list is reused quickly enough that running
+`VACUUM` is rarely necessary — only do it if disk usage actually matters.
+
 ### Web Dashboard
 - Real-time request streaming
 - Interactive request explorer with model filter

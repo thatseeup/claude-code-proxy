@@ -114,6 +114,7 @@ export default function SessionPicker({
   const [projectOpen, setProjectOpen] = useState(false);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
   const projectRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -211,6 +212,63 @@ export default function SessionPicker({
     }
   };
 
+  // Picks the next session token to navigate to after deleting all sessions
+  // in the current project. Prefers a session from a sibling project group;
+  // returns null if no other project has sessions.
+  const pickNextProjectSessionToken = (): string | null => {
+    const currentIdx = groups.findIndex(
+      (g) => g.projectDisplayName === selectedProject,
+    );
+    if (currentIdx === -1) return null;
+    const neighbor = groups[currentIdx + 1] ?? groups[currentIdx - 1];
+    if (neighbor && neighbor.sessions.length > 0) {
+      return toUrlToken(neighbor.sessions[0].sessionId);
+    }
+    return null;
+  };
+
+  const handleDeleteProject = async () => {
+    if (isDeletingProject || !selectedGroup) return;
+    const count = selectedGroup.sessions.length;
+    if (count === 0) return;
+    const ok = globalThis.confirm(
+      `Delete all ${count} session${count === 1 ? "" : "s"} in "${selectedProject}"? This cannot be undone.`,
+    );
+    if (!ok) return;
+    const nextToken = pickNextProjectSessionToken();
+    setIsDeletingProject(true);
+    try {
+      // Reuse the per-session DELETE endpoint — backend has no project-scoped
+      // delete and project→sessionId mapping lives only in SessionIndex (jsonl).
+      const results = await Promise.all(
+        selectedGroup.sessions.map((s) =>
+          fetch(
+            `/api/sessions/${encodeURIComponent(toUrlToken(s.sessionId))}`,
+            { method: "DELETE" },
+          ),
+        ),
+      );
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) {
+        throw new Error(
+          `Failed to delete ${failed.length}/${results.length} session(s)`,
+        );
+      }
+      if (nextToken) {
+        const project = getActiveProjectName(nextToken, sessions);
+        const proj = project === UNKNOWN_PROJECT ? "" : project;
+        navigate(`/requests/${encodeURIComponent(nextToken)}${buildQuery(proj)}`);
+      } else {
+        navigate("/requests");
+      }
+      revalidator.revalidate();
+    } catch (err) {
+      console.error("Failed to delete project sessions:", err);
+    } finally {
+      setIsDeletingProject(false);
+    }
+  };
+
   const handleSelectProject = (projectDisplayName: string) => {
     setProjectOpen(false);
     const group = groups.find((g) => g.projectDisplayName === projectDisplayName);
@@ -240,14 +298,14 @@ export default function SessionPicker({
   return (
     <div className="flex flex-col gap-1 border-b border-gray-200 dark:border-slate-700 px-2 py-2 bg-white dark:bg-slate-900">
       {/* Project picker */}
-      <div ref={projectRef} className="relative">
+      <div ref={projectRef} className="relative flex items-center gap-1">
         <button
           type="button"
           onClick={() => setProjectOpen((v) => !v)}
           aria-expanded={projectOpen}
           aria-haspopup="listbox"
           aria-label="Switch project"
-          className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs"
+          className="flex-1 min-w-0 flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-xs"
         >
           <div className="min-w-0 flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 shrink-0">
@@ -291,6 +349,21 @@ export default function SessionPicker({
               projectOpen ? "rotate-180" : ""
             }`}
           />
+        </button>
+
+        <button
+          type="button"
+          onClick={handleDeleteProject}
+          disabled={
+            isDeletingProject ||
+            !selectedGroup ||
+            selectedGroup.sessions.length === 0
+          }
+          aria-label={`Delete all sessions in project ${selectedProject}`}
+          title="Delete all sessions in this project"
+          className="shrink-0 p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+        >
+          <Trash2 className="w-4 h-4" />
         </button>
 
         {projectOpen && groups.length > 0 ? (
