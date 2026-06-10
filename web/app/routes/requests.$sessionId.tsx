@@ -8,7 +8,7 @@ import {
   useRouteLoaderData,
   useSearchParams,
 } from "@remix-run/react";
-import { ArrowLeftRight, Brain, RefreshCw, Sparkles, Zap } from "lucide-react";
+import { ArrowLeftRight, BookOpen, Brain, RefreshCw, Sparkles, Zap } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import HorizontalSplit from "../components/HorizontalSplit";
@@ -112,6 +112,8 @@ export function shouldRevalidate({
 
 function modelBadge(model: string | undefined) {
   if (!model) return <span className="text-gray-900 dark:text-gray-100">API</span>;
+  if (model.includes("fable"))
+    return <span className="text-amber-600 dark:text-amber-400 font-semibold">Fable</span>;
   if (model.includes("opus"))
     return <span className="text-purple-600 dark:text-purple-400 font-semibold">Opus</span>;
   if (model.includes("sonnet"))
@@ -579,6 +581,12 @@ export default function RequestsForSession() {
         <div className="inline-flex items-center bg-gray-100 dark:bg-slate-700 rounded p-0.5 space-x-0.5">
           {[
             { key: "all", label: "All", color: "", icon: null },
+            {
+              key: "fable",
+              label: "Fable",
+              color: "text-amber-600",
+              icon: <BookOpen className="w-3 h-3" />,
+            },
             {
               key: "opus",
               label: "Opus",
