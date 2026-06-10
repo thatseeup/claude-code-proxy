@@ -23,6 +23,20 @@ type modelPricing struct {
 //
 // Source: https://platform.claude.com/docs/en/about-claude/pricing
 var pricingTable = map[string]modelPricing{
+	"claude-fable-5": {
+		Input:        10.0,
+		Output:       50.0,
+		CacheWrite5m: 12.50,
+		CacheWrite1h: 20.0,
+		CacheRead:    1.0,
+	},
+	"claude-opus-4-8": {
+		Input:        5.0,
+		Output:       25.0,
+		CacheWrite5m: 6.25,
+		CacheWrite1h: 10.0,
+		CacheRead:    0.50,
+	},
 	"claude-opus-4-7": {
 		Input:        5.0,
 		Output:       25.0,

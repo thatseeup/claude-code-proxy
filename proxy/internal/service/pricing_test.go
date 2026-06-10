@@ -14,6 +14,43 @@ func approxEqual(a, b float64) bool {
 	return math.Abs(a-b) < pricingEpsilon
 }
 
+func TestCalculateCostUSD_Fable5_AllCategories(t *testing.T) {
+	usage := &model.AnthropicUsage{
+		InputTokens:          1_000_000,
+		OutputTokens:         500_000,
+		CacheReadInputTokens: 2_000_000,
+		CacheCreation: &model.AnthropicCacheCreation{
+			Ephemeral5mInputTokens: 400_000,
+			Ephemeral1hInputTokens: 100_000,
+		},
+	}
+	// 1M*$10 + 0.5M*$50 + 2M*$1 + 0.4M*$12.50 + 0.1M*$20
+	// = 10 + 25 + 2 + 5 + 2 = 44.0
+	want := 44.0
+	got, ok := CalculateCostUSD("claude-fable-5", usage)
+	if !ok || !approxEqual(got, want) {
+		t.Fatalf("fable-5: got=%v ok=%v want=%v", got, ok, want)
+	}
+}
+
+func TestCalculateCostUSD_Opus48_AllCategories(t *testing.T) {
+	usage := &model.AnthropicUsage{
+		InputTokens:          1_000_000,
+		OutputTokens:         500_000,
+		CacheReadInputTokens: 2_000_000,
+		CacheCreation: &model.AnthropicCacheCreation{
+			Ephemeral5mInputTokens: 400_000,
+			Ephemeral1hInputTokens: 100_000,
+		},
+	}
+	// Same prices as opus-4-7: 5 + 12.5 + 1 + 2.5 + 1 = 22.0
+	want := 22.0
+	got, ok := CalculateCostUSD("claude-opus-4-8", usage)
+	if !ok || !approxEqual(got, want) {
+		t.Fatalf("opus-4-8: got=%v ok=%v want=%v", got, ok, want)
+	}
+}
+
 func TestCalculateCostUSD_Opus47_AllCategories(t *testing.T) {
 	usage := &model.AnthropicUsage{
 		InputTokens:          1_000_000,
@@ -161,6 +198,8 @@ func TestCalculateCostUSD_DatedAliasNormalizesToBaseID(t *testing.T) {
 
 	// Spot-check the other base IDs accept dated aliases too.
 	for _, id := range []string{
+		"claude-fable-5-20260501",
+		"claude-opus-4-8-20260301",
 		"claude-opus-4-7-20260101",
 		"claude-opus-4-6-20251231",
 		"claude-sonnet-4-6-20251015",

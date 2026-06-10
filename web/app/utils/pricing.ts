@@ -16,6 +16,20 @@ export type ModelPricing = {
 };
 
 export const PRICING_TABLE: Record<string, ModelPricing> = {
+  "claude-fable-5": {
+    input: 10.0,
+    output: 50.0,
+    cacheWrite5m: 12.5,
+    cacheWrite1h: 20.0,
+    cacheRead: 1.0,
+  },
+  "claude-opus-4-8": {
+    input: 5.0,
+    output: 25.0,
+    cacheWrite5m: 6.25,
+    cacheWrite1h: 10.0,
+    cacheRead: 0.5,
+  },
   "claude-opus-4-7": {
     input: 5.0,
     output: 25.0,

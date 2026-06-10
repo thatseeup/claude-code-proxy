@@ -9,6 +9,34 @@ function approx(actual: number | null, expected: number) {
 }
 
 describe("calculateCostUSD", () => {
+  it("fable-5 all categories", () => {
+    const got = calculateCostUSD("claude-fable-5", {
+      input_tokens: 1_000_000,
+      output_tokens: 500_000,
+      cache_read_input_tokens: 2_000_000,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 400_000,
+        ephemeral_1h_input_tokens: 100_000,
+      },
+    });
+    // 1M*10 + 0.5M*50 + 2M*1 + 0.4M*12.5 + 0.1M*20 = 44.0
+    approx(got, 44.0);
+  });
+
+  it("opus-4-8 all categories", () => {
+    const got = calculateCostUSD("claude-opus-4-8", {
+      input_tokens: 1_000_000,
+      output_tokens: 500_000,
+      cache_read_input_tokens: 2_000_000,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 400_000,
+        ephemeral_1h_input_tokens: 100_000,
+      },
+    });
+    // Same prices as opus-4-7: 5 + 12.5 + 1 + 2.5 + 1 = 22.0
+    approx(got, 22.0);
+  });
+
   it("opus-4-7 all categories", () => {
     const got = calculateCostUSD("claude-opus-4-7", {
       input_tokens: 1_000_000,
@@ -110,6 +138,8 @@ describe("calculateCostUSD", () => {
 
     // Spot-check the other base ids accept dated aliases too.
     for (const id of [
+      "claude-fable-5-20260501",
+      "claude-opus-4-8-20260301",
       "claude-opus-4-7-20260101",
       "claude-opus-4-6-20251231",
       "claude-sonnet-4-6-20251015",
