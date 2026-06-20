@@ -376,6 +376,10 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                         handleDownloadSystem();
                       }}
                       disabled={!request.bodyRaw}
+                      // SSR renders the summary payload (no bodyRaw → disabled);
+                      // the client's detail fetch lands bodyRaw during hydration
+                      // and flips disabled. The difference is intentional.
+                      suppressHydrationWarning
                       className="p-1 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
                       title="Download system as JSON"
                     >
@@ -389,6 +393,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                         handleDownloadSystemMarkdown();
                       }}
                       disabled={!request.bodyRaw}
+                      suppressHydrationWarning
                       className="p-1 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
                       title="Download last system text as Markdown"
                     >
