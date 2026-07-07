@@ -118,6 +118,8 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
       ? { role: responseBody.role || 'assistant', content: responseBody.content }
       : null;
 
+  const messageNumbers = computeMessageNumbers(request.body?.messages ?? []);
+
   const handleCopy = async (content: string, key: string) => {
     try {
       await navigator.clipboard.writeText(content);
@@ -282,7 +284,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                         aria-pressed={isSelected}
                         title={message.role}
                       >
-                        {index + 1}
+                        {messageNumbers[index]}
                       </button>
                     );
                   })}
@@ -313,7 +315,12 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
               {expandedSections.conversation ? (
                 <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
                   {request.body.messages.map((message, index) => (
-                    <MessageBubble key={index} message={message} index={index} />
+                    <MessageBubble
+                      key={index}
+                      message={message}
+                      index={index}
+                      label={String(messageNumbers[index])}
+                    />
                   ))}
                   {responseMessage && (
                     <MessageBubble
@@ -337,6 +344,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                   <MessageBubble
                     message={request.body.messages[selectedMessageIndex]}
                     index={selectedMessageIndex}
+                    label={String(messageNumbers[selectedMessageIndex])}
                   />
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div className="text-sm font-medium text-gray-700 mb-2">Raw</div>
@@ -695,6 +703,21 @@ function extractRawMessageJSON(
     }
   }
   return formatJSON(fallback);
+}
+
+// Display numbers for conversation chips/cards. A `system` message that
+// immediately follows a `user` message shares that user's number, since the
+// pair belongs to the same request turn. Every other message increments.
+function computeMessageNumbers(messages: Array<{ role: string }>): number[] {
+  const numbers: number[] = [];
+  let current = 0;
+  messages.forEach((message, i) => {
+    const prev = messages[i - 1];
+    const sharesWithPrev = message.role === 'system' && prev?.role === 'user';
+    if (!sharesWithPrev) current += 1;
+    numbers[i] = current;
+  });
+  return numbers;
 }
 
 // Returns true when message.content is an array containing at least one
