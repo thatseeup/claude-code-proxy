@@ -255,6 +255,7 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                   {request.body.messages.map((message, index) => {
                     const isSelected = selectedMessageIndex === index;
                     const isUser = message.role === 'user';
+                    const isSystem = message.role === 'system';
                     const hasUserText = isUser && messageHasTextBlock(message);
                     let className = 'text-xs font-mono px-2 py-0.5 rounded-full border transition-colors cursor-pointer ';
                     if (isSelected) {
@@ -262,6 +263,8 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                         className += 'bg-amber-600 text-white border-amber-600 shadow-sm ring-2 ring-amber-300 font-bold';
                       } else if (isUser) {
                         className += 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-200';
+                      } else if (isSystem) {
+                        className += 'bg-purple-600 text-white border-purple-600 shadow-sm ring-2 ring-purple-200';
                       } else {
                         className += 'bg-blue-600 text-white border-blue-600 shadow-sm';
                       }
@@ -269,6 +272,8 @@ export default function RequestDetailContent({ request, onGrade }: RequestDetail
                       className += 'bg-amber-500 text-white border-amber-600 font-bold hover:bg-amber-600 hover:border-amber-700';
                     } else if (isUser) {
                       className += 'bg-white text-blue-700 border-blue-400 hover:border-blue-500 hover:bg-blue-50';
+                    } else if (isSystem) {
+                      className += 'bg-purple-100 text-purple-700 border-purple-400 font-semibold hover:bg-purple-200 hover:border-purple-500';
                     } else {
                       className += 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:text-blue-700';
                     }
@@ -734,7 +739,7 @@ function MessageBubble({ message, index, label }: { message: any; index: number;
   const roleColors = {
     'user': 'bg-blue-50 border border-blue-200',
     'assistant': 'bg-gray-50 border border-gray-200',
-    'system': 'bg-yellow-50 border border-yellow-200'
+    'system': 'bg-purple-50 border border-purple-300'
   };
 
   const roleIcons = {
@@ -746,7 +751,13 @@ function MessageBubble({ message, index, label }: { message: any; index: number;
   const roleIconColors = {
     'user': 'text-blue-600',
     'assistant': 'text-gray-600',
-    'system': 'text-yellow-600'
+    'system': 'text-purple-600'
+  };
+
+  const roleLabelColors = {
+    'user': 'text-gray-900',
+    'assistant': 'text-gray-900',
+    'system': 'text-purple-700'
   };
 
   const Icon = roleIcons[message.role as keyof typeof roleIcons] || User;
@@ -758,7 +769,7 @@ function MessageBubble({ message, index, label }: { message: any; index: number;
           <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-gray-200">
             <Icon className={`w-4 h-4 ${roleIconColors[message.role as keyof typeof roleIconColors] || 'text-gray-600'}`} />
           </div>
-          <span className="font-medium capitalize text-gray-900">{message.role}</span>
+          <span className={`font-medium capitalize ${roleLabelColors[message.role as keyof typeof roleLabelColors] || 'text-gray-900'}`}>{message.role}</span>
           <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded-full border border-gray-200">
             #{label ?? index + 1}
           </span>
