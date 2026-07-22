@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Wrench, Code, FileText, Database, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, Wrench, Code, FileText, Database, AlertCircle, Brain } from 'lucide-react';
 import { ToolResult } from './ToolResult';
 import { ToolUse } from './ToolUse';
 import { ImageContent } from './ImageContent';
@@ -14,6 +14,8 @@ interface ContentItem {
   input?: Record<string, any>;
   tool_call_id?: string;
   is_error?: boolean;
+  thinking?: string;
+  signature?: string;
 }
 
 interface MessageContentProps {
@@ -92,6 +94,10 @@ export function MessageContent({ content }: MessageContentProps) {
       case 'image':
         return <ImageContent content={content} />;
 
+      case 'thinking':
+      case 'redacted_thinking':
+        return <ThinkingContent text={content.thinking} />;
+
       default:
         return (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
@@ -127,6 +133,34 @@ export function MessageContent({ content }: MessageContentProps) {
           {JSON.stringify(content, null, 2)}
         </pre>
       </details>
+    </div>
+  );
+}
+
+// Component to render extended thinking blocks
+function ThinkingContent({ text }: { text?: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const thinking = (text || '').trim();
+
+  return (
+    <div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center space-x-2 text-sm text-violet-700 hover:text-violet-900 transition-colors w-full"
+        disabled={!thinking}
+      >
+        <Brain className="w-4 h-4 text-violet-500" />
+        <span className="font-medium">Thinking</span>
+        {!thinking && <span className="text-xs text-violet-400 ml-auto">no content</span>}
+        {thinking && isExpanded && <ChevronDown className="w-4 h-4 ml-auto" />}
+        {thinking && !isExpanded && <ChevronRight className="w-4 h-4 ml-auto" />}
+      </button>
+
+      {isExpanded && thinking && (
+        <div className="mt-3 text-sm text-violet-900 whitespace-pre-wrap leading-relaxed">
+          {thinking}
+        </div>
+      )}
     </div>
   );
 }
